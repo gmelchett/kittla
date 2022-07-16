@@ -36,6 +36,7 @@ func TestParse(t *testing.T) {
 
 		{"hej {hopp hipp}", []string{"hej", "hopp hipp"}, false},
 		{"hej \"hopp hipp\"", []string{"hej", "hopp hipp"}, false},
+		{"if {1 == 2} {puts a}", []string{"if", "1 == 2", "puts a"}, false},
 	}
 
 	k := New()
@@ -126,32 +127,57 @@ var parserTests = []parserTest{
 		},
 	},
 	{
-		program: "if {[set a 1]} {set b 2}",
+		program: "if {1} {set b 2}",
 		expects: map[string]string{
-			"a": "1",
 			"b": "2",
 		},
 	},
 	{
-		program: "if {[set a 0]} {set b 2}",
-		expects: map[string]string{
-			"a": "0",
-		},
+		program: "if {5 == 6} {set b 2}",
+		expects: map[string]string{},
 	},
 	{
-		program: "if {[set a 77]} {set b 2;set c 3;}",
+		program: "if {77 == 77} {set b 2;set c 3;}",
 		expects: map[string]string{
-			"a": "77",
 			"b": "2",
 			"c": "3",
 		},
 	},
-
+	{
+		program: "set ahej 77; if {$ahej == 77} {set b 2;set c 3;}",
+		expects: map[string]string{
+			"ahej": "77",
+			"b":    "2",
+			"c":    "3",
+		},
+	},
+	{
+		program: "set a 78; if {$a == 77} {set b 2;set c 3;}",
+		expects: map[string]string{
+			"a": "78",
+		},
+	},
 	{
 		program: "set a 1; inc a; set b 66; inc b 1",
 		expects: map[string]string{
 			"a": "2",
 			"b": "67",
+		},
+	},
+
+	{
+		program: "set ii 1; set b 66; while {$ii < 10} {inc ii; inc b 1}",
+		expects: map[string]string{
+			"ii": "10",
+			"b":  "75",
+		},
+	},
+
+	{
+		program: "set ii 1; set b 66; while {$b < $ii} {inc ii; inc b 1}",
+		expects: map[string]string{
+			"ii": "1",
+			"b":  "66",
 		},
 	},
 }

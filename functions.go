@@ -3,7 +3,6 @@ package kittla
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/tidwall/expr"
 )
@@ -72,13 +71,19 @@ func funcElse(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 
 }
 
-func funcExpr(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
-	var s strings.Builder
+func exprJoin(args [][]byte) (expr.Value, error) {
+
+	joined := make([]byte, 0, 256)
 	for i := range args {
-		s.Write(args[i])
-		s.WriteString(" ")
+		joined = append(joined, args[i]...)
 	}
-	if res, err := expr.Eval(s.String(), nil); err == nil {
+
+	return expr.Eval(string(joined), nil)
+}
+
+func funcExpr(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
+
+	if res, err := exprJoin(args); err == nil {
 		return []byte(res.String()), nil
 	} else {
 		return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
@@ -88,12 +93,11 @@ func funcExpr(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 func funcIf(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 
 	ifarg, err := k.Parse(&CodeBlock{Code: string(args[0]), LineNum: k.currLine}, false)
-
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := expr.Eval(string(ifarg[len(ifarg)-1]), nil)
+	res, err := exprJoin(ifarg)
 
 	if err != nil {
 		return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
@@ -174,7 +178,7 @@ func funcWhile(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 			return nil, err
 		}
 
-		w, err := expr.Eval(string(whileArg[len(whileArg)-1]), nil)
+		w, err := exprJoin(whileArg)
 
 		if err != nil {
 			return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)

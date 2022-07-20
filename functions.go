@@ -10,7 +10,9 @@ import (
 type funcId int
 
 const (
-	FUNC_DEC funcId = iota
+	FUNC_BREAK funcId = iota
+	FUNC_DEC
+	FUNC_CONTINUE
 	FUNC_ELIF
 	FUNC_ELSE
 	FUNC_EVAL
@@ -31,6 +33,20 @@ type function struct {
 }
 
 var builtinFunctions = []function{
+	function{
+		names:   []string{"break"},
+		minArgs: 0,
+		maxArgs: 0,
+		funcId:  FUNC_BREAK,
+		fn:      funcBreakContinue,
+	},
+	function{
+		names:   []string{"continue"},
+		minArgs: 0,
+		maxArgs: 0,
+		funcId:  FUNC_CONTINUE,
+		fn:      funcBreakContinue,
+	},
 	function{
 		names:   []string{"dec", "decr"},
 		minArgs: 1,
@@ -103,6 +119,16 @@ var builtinFunctions = []function{
 	},
 }
 
+func funcBreakContinue(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+	switch funcId {
+	case FUNC_BREAK:
+		k.isBreak = true
+	case FUNC_CONTINUE:
+		k.isContinue = true
+	}
+	return nil, nil
+}
+
 func funcElIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
 
 	if k.currFrame.prevFunc != FUNC_IF && k.currFrame.prevFunc != FUNC_ELIF {
@@ -121,7 +147,8 @@ func funcElse(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, erro
 	}
 
 	if !k.currFrame.ifTaken {
-		return k.Execute(&CodeBlock{Code: string(args[0]), LineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: string(args[0]), lineNum: k.currLine})
+		return res, err
 	}
 	return nil, nil
 }
@@ -146,7 +173,7 @@ func funcEval(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, erro
 
 func funcIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
 
-	ifarg, err := k.Parse(&CodeBlock{Code: string(args[0]), LineNum: k.currLine}, false)
+	ifarg, err := k.Parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +187,8 @@ func funcIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error)
 	k.currFrame.ifTaken = res.Bool()
 
 	if k.currFrame.ifTaken {
-		return k.Execute(&CodeBlock{Code: string(args[1]), LineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: string(args[1]), lineNum: k.currLine})
+		return res, err
 	}
 
 	return []byte(""), nil
@@ -229,7 +257,7 @@ func funcWhile(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, err
 	var res []byte
 
 	for {
-		whileArg, err := k.Parse(&CodeBlock{Code: string(args[0]), LineNum: k.currLine}, false)
+		whileArg, err := k.Parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
 
 		if err != nil {
 			return nil, err
@@ -242,10 +270,18 @@ func funcWhile(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, err
 		}
 
 		if w.Bool() {
-			res, err = k.Execute(&CodeBlock{Code: string(args[1]), LineNum: k.currLine})
+			res, _, err = k.executeCore(&codeBlock{code: string(args[1]), lineNum: k.currLine})
 			if err != nil {
 				return nil, err
 			}
+			if k.isBreak {
+				k.isBreak = false
+				break
+			}
+			if k.isContinue {
+				k.isContinue = false
+			}
+
 		} else {
 			break
 		}

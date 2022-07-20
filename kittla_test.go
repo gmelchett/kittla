@@ -43,7 +43,7 @@ func TestParse(t *testing.T) {
 
 	for i := range tests {
 
-		args, err := k.Parse(&CodeBlock{Code: tests[i].code}, false)
+		args, err := k.Parse(&codeBlock{code: tests[i].code}, false)
 		if (err != nil) != tests[i].fails {
 			t.Logf("Expected failure: %t got: %v. Test: %d\n", tests[i].fails, err, i)
 			t.Fail()
@@ -210,13 +210,48 @@ var parserTests = []parserTest{
 			"input": "9",
 		},
 	},
+	{
+		program: "set i 0; while {$i < 10} { inc i }",
+		expects: map[string]string{
+			"i": "10",
+		},
+	},
+	{
+		program: "set i 0; while {$i < 10} { inc i; if {$i == 5} { break } }",
+		expects: map[string]string{
+			"i": "5",
+		},
+	},
+	{
+		program: "set j 0; set i 0; while {$i < 10} { inc i; if {$i == 5} { continue }; inc j }",
+		expects: map[string]string{
+			"i": "10",
+			"j": "9",
+		},
+	},
+	{
+		program: "set tot 0; set i 0; while {$i < 10} { inc i; set j 0; while {$j < 10} { inc j; inc tot }}",
+		expects: map[string]string{
+			"i":   "10",
+			"j":   "10",
+			"tot": "100",
+		},
+	},
+	{
+		program: "set tot 0; set i 0; while {$i < 10} { inc i; set j 0; while {$j < 10} { inc j; if {$i > 5} { break }; inc tot}}",
+		expects: map[string]string{
+			"i":   "10",
+			"j":   "1",
+			"tot": "50",
+		},
+	},
 }
 
 func TestParser(t *testing.T) {
 
 	for i, te := range parserTests {
 		k := New()
-		_, err := k.Execute(&CodeBlock{Code: te.program})
+		_, _, err := k.Execute(te.program)
 		if (err != nil) != te.fails {
 			t.Logf("test %d - Failure not matching Excepted failure: %t got: %v\n", i, te.fails, err)
 			t.Fail()

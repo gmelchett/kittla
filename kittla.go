@@ -6,10 +6,10 @@ import (
 	"runtime/debug"
 )
 
-type CodeBlock struct {
-	Code    string
+type codeBlock struct {
+	code    string
 	idx     int
-	LineNum int
+	lineNum int
 	eof     bool
 }
 
@@ -25,7 +25,7 @@ func validChar(c byte) bool {
 	return validStartChar(c) || (c >= '0' && c <= '9')
 }
 
-func (cb *CodeBlock) nextPeek(peek bool) byte {
+func (cb *codeBlock) nextPeek(peek bool) byte {
 	var c byte
 	if cb.eof {
 		debug.PrintStack()
@@ -33,40 +33,40 @@ func (cb *CodeBlock) nextPeek(peek bool) byte {
 		return 'X' // next/peek shouldn't be used at eof
 	}
 
-	c = cb.Code[cb.idx]
+	c = cb.code[cb.idx]
 
 	if peek {
-		if c == '\\' && cb.idx+1 < len(cb.Code) && cb.Code[cb.idx+1] == '\n' {
+		if c == '\\' && cb.idx+1 < len(cb.code) && cb.code[cb.idx+1] == '\n' {
 			return ' '
 		}
 		return c
 	}
 
 	cb.idx++
-	cb.eof = cb.idx == len(cb.Code)
+	cb.eof = cb.idx == len(cb.code)
 
 	// handle lines which ends with \ and translate to space
-	if !cb.eof && c == '\\' && cb.Code[cb.idx] == '\n' {
-		cb.LineNum++
+	if !cb.eof && c == '\\' && cb.code[cb.idx] == '\n' {
+		cb.lineNum++
 		cb.idx++
 		c = ' '
-		cb.eof = cb.idx == len(cb.Code)
+		cb.eof = cb.idx == len(cb.code)
 	} else if c == '\n' {
-		cb.LineNum++
+		cb.lineNum++
 	}
 
 	return c
 }
 
-func (cb *CodeBlock) next() byte {
+func (cb *codeBlock) next() byte {
 	return cb.nextPeek(false)
 }
 
-func (cb *CodeBlock) peek() byte {
+func (cb *codeBlock) peek() byte {
 	return cb.nextPeek(true)
 }
 
-func (cb *CodeBlock) skipBlanks() {
+func (cb *codeBlock) skipBlanks() {
 	for {
 		if cb.eof {
 			return
@@ -81,7 +81,7 @@ func (cb *CodeBlock) skipBlanks() {
 	}
 }
 
-func (cb *CodeBlock) untilBrackedEnd() ([]byte, error) {
+func (cb *codeBlock) untilBrackedEnd() ([]byte, error) {
 	res := make([]byte, 0, 256)
 	depth := 1
 	for {
@@ -102,23 +102,27 @@ func (cb *CodeBlock) untilBrackedEnd() ([]byte, error) {
 		}
 		res = append(res, c)
 		if cb.eof {
-			return nil, fmt.Errorf("Premature end of file. Line: %d", cb.LineNum)
+			return nil, fmt.Errorf("Premature end of file. Line: %d", cb.lineNum)
 		}
 	}
 }
 
 type frame struct {
 	prevFunc funcId
-	ifTaken  bool // Changed if prevFunc == FUNC_IF || FUNC_ELIF
-	objects  map[string][]byte
+
+	ifTaken bool // Changed if prevFunc == FUNC_IF || FUNC_ELIF
+
+	objects map[string][]byte
 }
 
 type Kittla struct {
-	PrevFunc  funcId
 	functions map[string]*function
 	currLine  int
 	frames    []*frame
 	currFrame *frame
+
+	isContinue bool // Set until continue is handled
+	isBreak    bool // Set until break is handled
 }
 
 func New() *Kittla {
@@ -144,13 +148,13 @@ func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
 	return k.functions["unknown"].fn(k, FUNC_UNKNOWN, fName, args[1:])
 }
 
-func (k *Kittla) expandVar(cb *CodeBlock) ([]byte, error) {
+func (k *Kittla) expandVar(cb *codeBlock) ([]byte, error) {
 
 	var varName []byte
 	var err error
 
 	if cb.eof {
-		return nil, fmt.Errorf("Unexpected end of file. Line: %d", cb.LineNum)
+		return nil, fmt.Errorf("Unexpected end of file. Line: %d", cb.lineNum)
 	}
 
 	c := cb.peek()
@@ -164,7 +168,7 @@ func (k *Kittla) expandVar(cb *CodeBlock) ([]byte, error) {
 		c = cb.next()
 
 		if !validStartChar(c) {
-			return nil, fmt.Errorf("Invalid variable start character. Line: %d", cb.LineNum)
+			return nil, fmt.Errorf("Invalid variable start character. Line: %d", cb.lineNum)
 		}
 		varName = append(varName, c)
 		for {
@@ -188,10 +192,10 @@ func (k *Kittla) expandVar(cb *CodeBlock) ([]byte, error) {
 	if v, present := k.currFrame.objects[string(varName)]; present {
 		return v, nil
 	}
-	return nil, fmt.Errorf("Unknown variable: %s Line: %d", string(varName), cb.LineNum)
+	return nil, fmt.Errorf("Unknown variable: %s Line: %d", string(varName), cb.lineNum)
 }
 
-func (k *Kittla) Parse(cb *CodeBlock, isPre bool) ([][]byte, error) {
+func (k *Kittla) Parse(cb *codeBlock, isPre bool) ([][]byte, error) {
 
 	for {
 		cb.skipBlanks()
@@ -257,9 +261,9 @@ parseLoop:
 			if isPre {
 				break parseLoop
 			}
-			return nil, fmt.Errorf("Stray ]. Line: %d", cb.LineNum)
+			return nil, fmt.Errorf("Stray ]. Line: %d", cb.lineNum)
 		case '[':
-			k.currLine = cb.LineNum
+			k.currLine = cb.lineNum
 			if largs, err := k.Parse(cb, true); err == nil {
 				if result, err := k.executeCmd(largs); err == nil {
 					currArg = append(currArg, result...)
@@ -301,7 +305,7 @@ parseLoop:
 	return args, nil
 }
 
-func (k *Kittla) Execute(cb *CodeBlock) ([]byte, error) {
+func (k *Kittla) executeCore(cb *codeBlock) ([]byte, funcId, error) {
 
 	var res []byte
 	var args [][]byte
@@ -310,7 +314,7 @@ func (k *Kittla) Execute(cb *CodeBlock) ([]byte, error) {
 	k.frames = append(k.frames, k.currFrame)
 	k.currFrame = &frame{objects: k.currFrame.objects}
 
-	k.currLine = cb.LineNum
+	k.currLine = cb.lineNum
 
 	for !cb.eof && err == nil {
 		args, err = k.Parse(cb, false)
@@ -318,12 +322,30 @@ func (k *Kittla) Execute(cb *CodeBlock) ([]byte, error) {
 		if err != nil {
 			break
 		}
-		res, err = k.executeCmd(args)
+		if len(args) > 0 {
+			res, err = k.executeCmd(args)
+			if k.isBreak || k.isContinue {
+				break
+			}
+		}
 	}
-	k.PrevFunc = k.currFrame.prevFunc
+	prevFunc := k.currFrame.prevFunc
 
 	k.currFrame = k.frames[len(k.frames)-1]
 	k.frames = k.frames[:len(k.frames)-1]
 
-	return res, err
+	return res, prevFunc, err
+}
+
+func (k *Kittla) Execute(prog string) ([]byte, funcId, error) {
+	res, funcId, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
+	if err == nil {
+		if k.isBreak {
+			return nil, funcId, fmt.Errorf("Unhandled break")
+		}
+		if k.isContinue {
+			return nil, funcId, fmt.Errorf("Unhandled continue")
+		}
+	}
+	return res, funcId, err
 }

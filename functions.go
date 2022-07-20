@@ -16,6 +16,18 @@ type function struct {
 
 var builtinFunctions = []function{
 	function{
+		names:   []string{"dec", "decr"},
+		minArgs: 1,
+		maxArgs: 2,
+		fn:      funcIncDec,
+	},
+	function{
+		names:   []string{"elif", "elseif"},
+		minArgs: 2,
+		maxArgs: 2,
+		fn:      funcElIf,
+	},
+	function{
 		names:   []string{"else"},
 		minArgs: 1,
 		maxArgs: 1,
@@ -37,7 +49,7 @@ var builtinFunctions = []function{
 		names:   []string{"inc", "incr"},
 		minArgs: 1,
 		maxArgs: 2,
-		fn:      funcInc,
+		fn:      funcIncDec,
 	},
 	function{
 		names:   []string{"puts", "print"},
@@ -65,10 +77,22 @@ var builtinFunctions = []function{
 	},
 }
 
+func funcElIf(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
+
+	if k.currFrame.prevFunc != "if" && k.currFrame.prevFunc != "elif" && k.currFrame.prevFunc != "elseif" {
+		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
+	}
+
+	if !k.currFrame.ifTaken {
+		return funcIf(k, "if", args)
+	}
+	return nil, nil
+}
+
 func funcElse(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 
-	if k.currFrame.prevFunc != "if" {
-		return nil, fmt.Errorf("%s lacks if. Line: %d", cmd, k.currLine)
+	if k.currFrame.prevFunc != "if" && k.currFrame.prevFunc != "elif" && k.currFrame.prevFunc != "elseif" {
+		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
 	}
 
 	if !k.currFrame.ifTaken {
@@ -118,11 +142,11 @@ func funcIf(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 	return []byte(""), nil
 }
 
-func funcInc(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
-	incVal := 1
+func funcIncDec(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
+	d := 1
 	if len(args) == 2 {
 		if v, err := strconv.ParseInt(string(args[1]), 0, 64); err == nil {
-			incVal = int(v)
+			d = int(v)
 		} else {
 			return nil, fmt.Errorf("%s failed with %v. Line %d", cmd, err, k.currLine)
 		}
@@ -130,7 +154,12 @@ func funcInc(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 
 	if v, present := k.currFrame.objects[string(args[0])]; present {
 		if vv, err := strconv.ParseInt(string(v), 0, 64); err == nil {
-			s := []byte(fmt.Sprintf("%d", int(vv)+incVal))
+			var s []byte
+			if cmd == "incr" || cmd == "inc" {
+				s = []byte(fmt.Sprintf("%d", int(vv)+d))
+			} else {
+				s = []byte(fmt.Sprintf("%d", int(vv)-d))
+			}
 			k.currFrame.objects[string(args[0])] = s
 			return s, nil
 		} else {

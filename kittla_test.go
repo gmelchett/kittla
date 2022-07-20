@@ -180,6 +180,36 @@ var parserTests = []parserTest{
 			"b":  "66",
 		},
 	},
+
+	{
+		program: "set res 0; set input 5; if {$res == 0} {inc input}; else {dec input}",
+		expects: map[string]string{
+			"res":   "0",
+			"input": "6",
+		},
+	},
+	{
+		program: "set res 1; set input 5; if {$res == 0} {inc input}; else {dec input}",
+		expects: map[string]string{
+			"res":   "1",
+			"input": "4",
+		},
+	},
+
+	{
+		program: "set res 2; set input 5; if {$res == 0} {inc input}; elseif {$res == 2} {inc input 2; inc res}; else {dec input 2};",
+		expects: map[string]string{
+			"res":   "3",
+			"input": "7",
+		},
+	},
+	{
+		program: "set res 3; set input 5; if {$res == 0} {inc input}; elseif {$res == 2} {inc input 2; inc res}; elseif {$res == 3} {inc input 4; inc res 4}; else {dec input 2};",
+		expects: map[string]string{
+			"res":   "7",
+			"input": "9",
+		},
+	},
 }
 
 func TestParser(t *testing.T) {
@@ -193,14 +223,14 @@ func TestParser(t *testing.T) {
 			return
 		}
 
-		if len(k.objects) != len(te.expects) {
-			t.Logf("Objects mismatch, got: %d wanted: %d\n", len(k.objects), len(te.expects))
-			spew.Dump(k.objects)
+		if len(k.currFrame.objects) != len(te.expects) {
+			t.Logf("Objects mismatch, got: %d wanted: %d\n", len(k.currFrame.objects), len(te.expects))
+			spew.Dump(k.currFrame.objects)
 			spew.Dump(te.expects)
 			t.Fail()
 			return
 		}
-		for k, v := range k.objects {
+		for k, v := range k.currFrame.objects {
 			if ev, present := te.expects[string(k)]; present && string(v) != ev {
 				t.Logf("Content of \"%s\" mismatch. Got \"%s\" wanted %s\n",
 					string(k), string(v), ev)

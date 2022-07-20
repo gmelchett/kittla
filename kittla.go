@@ -108,12 +108,13 @@ func (cb *CodeBlock) untilBrackedEnd() ([]byte, error) {
 }
 
 type frame struct {
-	prevFunc string
-	ifTaken  bool // Changed if prevFunc == "if"
+	prevFunc funcId
+	ifTaken  bool // Changed if prevFunc == FUNC_IF || FUNC_ELIF
 	objects  map[string][]byte
 }
 
 type Kittla struct {
+	PrevFunc  funcId
 	functions map[string]*function
 	currLine  int
 	frames    []*frame
@@ -136,11 +137,11 @@ func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
 		if fn.maxArgs != -1 && len(args[1:]) > fn.maxArgs {
 			return nil, fmt.Errorf("%s must have at most %d argument(s). Line: %d", fName, fn.maxArgs, k.currLine)
 		}
-		defer func() { k.currFrame.prevFunc = fName }()
-		return fn.fn(k, fName, args[1:])
+		defer func() { k.currFrame.prevFunc = fn.funcId }()
+		return fn.fn(k, fn.funcId, fName, args[1:])
 
 	}
-	return k.functions["unknown"].fn(k, fName, args[1:])
+	return k.functions["unknown"].fn(k, FUNC_UNKNOWN, fName, args[1:])
 }
 
 func (k *Kittla) expandVar(cb *CodeBlock) ([]byte, error) {
@@ -319,6 +320,7 @@ func (k *Kittla) Execute(cb *CodeBlock) ([]byte, error) {
 		}
 		res, err = k.executeCmd(args)
 	}
+	k.PrevFunc = k.currFrame.prevFunc
 
 	k.currFrame = k.frames[len(k.frames)-1]
 	k.frames = k.frames[:len(k.frames)-1]

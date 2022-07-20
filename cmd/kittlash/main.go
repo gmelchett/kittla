@@ -55,7 +55,9 @@ func main() {
 			line.AppendHistory(cmd)
 
 			if res, err := k.Execute(&kittla.CodeBlock{Code: cmd}); err == nil {
-				fmt.Println(string(res))
+				if k.PrevFunc != kittla.FUNC_PRINT {
+					fmt.Println(string(res))
+				}
 			} else {
 				fmt.Printf("execute error: %v\n", err)
 			}

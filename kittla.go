@@ -107,29 +107,40 @@ func (cb *CodeBlock) untilBrackedEnd() ([]byte, error) {
 	}
 }
 
+type frame struct {
+	prevFunc string
+	ifTaken  bool // Changed if prevFunc == "if"
+	objects  map[string][]byte
+}
+
 type Kittla struct {
-	objects   map[string][]byte
 	functions map[string]*function
 	currLine  int
+	frames    []*frame
+	currFrame *frame
 }
 
 func New() *Kittla {
-	return &Kittla{objects: make(map[string][]byte), functions: getFuncMap()}
+	k := &Kittla{functions: getFuncMap()}
+	k.currFrame = &frame{objects: make(map[string][]byte)}
+	return k
 }
 
 func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
+	fName := string(args[0])
 
-	if fn, present := k.functions[string(args[0])]; present {
+	if fn, present := k.functions[fName]; present {
 		if fn.minArgs != -1 && len(args[1:]) < fn.minArgs {
-			return nil, fmt.Errorf("%s must have at least %d argument(s). Line: %d", string(args[0]), fn.minArgs, k.currLine)
+			return nil, fmt.Errorf("%s must have at least %d argument(s). Line: %d", fName, fn.minArgs, k.currLine)
 		}
 		if fn.maxArgs != -1 && len(args[1:]) > fn.maxArgs {
-			return nil, fmt.Errorf("%s must have at most %d argument(s). Line: %d", string(args[0]), fn.maxArgs, k.currLine)
+			return nil, fmt.Errorf("%s must have at most %d argument(s). Line: %d", fName, fn.maxArgs, k.currLine)
 		}
+		defer func() { k.currFrame.prevFunc = fName }()
+		return fn.fn(k, fName, args[1:])
 
-		return fn.fn(k, string(args[0]), args[1:])
 	}
-	return k.functions["unknown"].fn(k, string(args[0]), args[1:])
+	return k.functions["unknown"].fn(k, fName, args[1:])
 }
 
 func (k *Kittla) expandVar(cb *CodeBlock) ([]byte, error) {
@@ -173,7 +184,7 @@ func (k *Kittla) expandVar(cb *CodeBlock) ([]byte, error) {
 		}
 
 	}
-	if v, present := k.objects[string(varName)]; present {
+	if v, present := k.currFrame.objects[string(varName)]; present {
 		return v, nil
 	}
 	return nil, fmt.Errorf("Unknown variable: %s Line: %d", string(varName), cb.LineNum)
@@ -295,6 +306,9 @@ func (k *Kittla) Execute(cb *CodeBlock) ([]byte, error) {
 	var args [][]byte
 	var err error
 
+	k.frames = append(k.frames, k.currFrame)
+	k.currFrame = &frame{objects: k.currFrame.objects}
+
 	k.currLine = cb.LineNum
 
 	for !cb.eof && err == nil {
@@ -306,9 +320,8 @@ func (k *Kittla) Execute(cb *CodeBlock) ([]byte, error) {
 		res, err = k.executeCmd(args)
 	}
 
-	if err == nil {
-		return res, nil
-	} else {
-		return nil, err
-	}
+	k.currFrame = k.frames[len(k.frames)-1]
+	k.frames = k.frames[:len(k.frames)-1]
+
+	return res, err
 }

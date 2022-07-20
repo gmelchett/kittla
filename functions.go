@@ -67,8 +67,14 @@ var builtinFunctions = []function{
 
 func funcElse(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 
-	return nil, nil
+	if k.currFrame.prevFunc != "if" {
+		return nil, fmt.Errorf("%s lacks if. Line: %d", cmd, k.currLine)
+	}
 
+	if !k.currFrame.ifTaken {
+		return k.Execute(&CodeBlock{Code: string(args[0]), LineNum: k.currLine})
+	}
+	return nil, nil
 }
 
 func exprJoin(args [][]byte) (expr.Value, error) {
@@ -103,12 +109,10 @@ func funcIf(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 		return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
 	}
 
-	if res.Bool() {
-		if res, err := k.Execute(&CodeBlock{Code: string(args[1]), LineNum: k.currLine}); err == nil {
-			return res, nil
-		} else {
-			return nil, err
-		}
+	k.currFrame.ifTaken = res.Bool()
+
+	if k.currFrame.ifTaken {
+		return k.Execute(&CodeBlock{Code: string(args[1]), LineNum: k.currLine})
 	}
 
 	return []byte(""), nil
@@ -124,10 +128,10 @@ func funcInc(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 		}
 	}
 
-	if v, present := k.objects[string(args[0])]; present {
+	if v, present := k.currFrame.objects[string(args[0])]; present {
 		if vv, err := strconv.ParseInt(string(v), 0, 64); err == nil {
 			s := []byte(fmt.Sprintf("%d", int(vv)+incVal))
-			k.objects[string(args[0])] = s
+			k.currFrame.objects[string(args[0])] = s
 			return s, nil
 		} else {
 			return nil, fmt.Errorf("%s: Variable %s does not contain a number:  %v. Line %d", cmd, string(args[0]), err, k.currLine)
@@ -148,13 +152,13 @@ func funcSet(k *Kittla, cmd string, args [][]byte) ([]byte, error) {
 	case 0:
 		return nil, fmt.Errorf("%s command must be followed with one or two arguments. Line: %d", cmd, k.currLine)
 	case 1:
-		if v, present := k.objects[string(args[0])]; present {
+		if v, present := k.currFrame.objects[string(args[0])]; present {
 			result = v
 		} else {
 			return nil, fmt.Errorf("%s: no such variable: %s. Line: %d", cmd, string(args[0]), k.currLine)
 		}
 	case 2:
-		k.objects[string(args[0])] = args[1]
+		k.currFrame.objects[string(args[0])] = args[1]
 		result = args[1]
 	default:
 		return nil, fmt.Errorf("%s command must be followed with at most two argument. Line: %d", cmd, k.currLine)

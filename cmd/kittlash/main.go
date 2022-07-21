@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"kittla"
 	"log"
 	"os"
@@ -22,7 +24,7 @@ func createDir(dir string) (err error) {
 
 const defaultPrompt = "% "
 
-func main() {
+func interactive() {
 
 	xdgh := xdg.New("gmelchett", "kittlash")
 
@@ -120,4 +122,43 @@ mainloop:
 			prog.Reset()
 		}
 	}
+
+}
+
+func execute(prog string) {
+	if res, lastFunc, err := kittla.New().Execute(prog); err == nil {
+		if lastFunc != kittla.FUNC_PRINT {
+			fmt.Println(string(res))
+		}
+	} else {
+		fmt.Println("Script failed with:", err)
+		os.Exit(1)
+	}
+}
+
+func main() {
+
+	var prog string
+
+	flag.StringVar(&prog, "e", "", "kittla code to execute and then quit. Prints the final result.")
+
+	flag.Parse()
+
+	if len(prog) > 0 {
+		execute(prog)
+	} else if len(flag.Args()) == 0 {
+		interactive()
+	} else if len(flag.Args()) == 1 {
+		if d, err := ioutil.ReadFile(flag.Args()[0]); err == nil {
+			execute(string(d))
+		} else {
+			fmt.Println("Failed to read given file:", err)
+			os.Exit(1)
+		}
+
+	} else {
+		fmt.Println("Too many arguments.")
+		os.Exit(1)
+	}
+
 }

@@ -50,8 +50,8 @@ func main() {
 
 ```
 
-Or you can use  `kittlash` found in `cmd/kittlash`. Currently `kittlash` can only be used in
-interactive mode.
+Or you can use  `kittlash` found in `cmd/kittlash`. Either in interactive mode, directly execute
+code via `-e` or just give the script file name as argument.
 
 ## Language features
 

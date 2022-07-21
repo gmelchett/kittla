@@ -173,7 +173,7 @@ func funcEval(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, erro
 
 func funcIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
 
-	ifarg, err := k.Parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
+	ifarg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func funcWhile(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, err
 	var res []byte
 
 	for {
-		whileArg, err := k.Parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
+		whileArg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
 
 		if err != nil {
 			return nil, err

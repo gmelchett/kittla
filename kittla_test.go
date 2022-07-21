@@ -43,7 +43,7 @@ func TestParse(t *testing.T) {
 
 	for i := range tests {
 
-		args, err := k.Parse(&codeBlock{code: tests[i].code}, false)
+		args, err := k.parse(&codeBlock{code: tests[i].code}, false)
 		if (err != nil) != tests[i].fails {
 			t.Logf("Expected failure: %t got: %v. Test: %d\n", tests[i].fails, err, i)
 			t.Fail()
@@ -247,7 +247,7 @@ var parserTests = []parserTest{
 	},
 }
 
-func TestParser(t *testing.T) {
+func Testparser(t *testing.T) {
 
 	for i, te := range parserTests {
 		k := New()

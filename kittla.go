@@ -203,7 +203,7 @@ func (k *Kittla) expandVar(cb *codeBlock) ([]byte, error) {
 	return nil, fmt.Errorf("Unknown variable: %s Line: %d", string(varName), cb.lineNum)
 }
 
-func (k *Kittla) Parse(cb *codeBlock, isPre bool) ([][]byte, error) {
+func (k *Kittla) parse(cb *codeBlock, isPre bool) ([][]byte, error) {
 
 	for {
 		cb.skipBlanks()
@@ -272,7 +272,7 @@ parseLoop:
 			return nil, fmt.Errorf("Stray ]. Line: %d", cb.lineNum)
 		case '[':
 			k.currLine = cb.lineNum
-			if largs, err := k.Parse(cb, true); err == nil {
+			if largs, err := k.parse(cb, true); err == nil {
 				if result, err := k.executeCmd(largs); err == nil {
 					currArg = append(currArg, result...)
 				} else {
@@ -326,7 +326,7 @@ func (k *Kittla) executeCore(cb *codeBlock) ([]byte, funcId, error) {
 	k.currLine = cb.lineNum
 
 	for !cb.eof && err == nil {
-		args, err = k.Parse(cb, false)
+		args, err = k.parse(cb, false)
 
 		if err != nil {
 			break

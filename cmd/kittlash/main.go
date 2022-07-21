@@ -103,6 +103,10 @@ mainloop:
 				}
 				prog.Reset()
 				prompt = defaultPrompt
+			} else if depth < 0 {
+				fmt.Println("To many closing } and/or ]")
+				prog.Reset()
+				prompt = defaultPrompt
 			} else {
 				prompt = "... " + strings.Repeat("    ", depth)
 			}

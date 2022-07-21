@@ -17,14 +17,18 @@ func isBlank(c byte) bool {
 	return c == ' ' || c == '\t'
 }
 
+// valid command start character
 func validStartChar(c byte) bool {
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
 }
 
+// valid characters in command after first character
 func validChar(c byte) bool {
 	return validStartChar(c) || (c >= '0' && c <= '9')
 }
 
+// Get next character from input. Moves forward in buffer if peek = false.
+// Keeps track of current line number, and \ at end of line
 func (cb *codeBlock) nextPeek(peek bool) byte {
 	var c byte
 	if cb.eof {
@@ -66,6 +70,7 @@ func (cb *codeBlock) peek() byte {
 	return cb.nextPeek(true)
 }
 
+// scans forward until none blank or end-of-file
 func (cb *codeBlock) skipBlanks() {
 	for {
 		if cb.eof {
@@ -81,6 +86,7 @@ func (cb *codeBlock) skipBlanks() {
 	}
 }
 
+// Continues scanning forward until paired } shows up - or end of file.
 func (cb *codeBlock) untilBrackedEnd() ([]byte, error) {
 	res := make([]byte, 0, 256)
 	depth := 1
@@ -109,10 +115,8 @@ func (cb *codeBlock) untilBrackedEnd() ([]byte, error) {
 
 type frame struct {
 	prevFunc funcId
-
-	ifTaken bool // Changed if prevFunc == FUNC_IF || FUNC_ELIF
-
-	objects map[string][]byte
+	ifTaken  bool // Changed if prevFunc == FUNC_IF || FUNC_ELIF
+	objects  map[string][]byte
 }
 
 type Kittla struct {
@@ -125,12 +129,15 @@ type Kittla struct {
 	isBreak    bool // Set until break is handled
 }
 
+// Returns a new instance of the kittla language
 func New() *Kittla {
 	k := &Kittla{functions: getFuncMap()}
 	k.currFrame = &frame{objects: make(map[string][]byte)}
 	return k
 }
 
+// Execute one parsed command. First entry in args is the command. Might be recursive in case of
+// more complex commands like if {} {body}.
 func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
 	fName := string(args[0])
 
@@ -148,6 +155,7 @@ func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
 	return k.functions["unknown"].fn(k, FUNC_UNKNOWN, fName, args[1:])
 }
 
+// Expands any $name to the actual value.
 func (k *Kittla) expandVar(cb *codeBlock) ([]byte, error) {
 
 	var varName []byte
@@ -305,6 +313,7 @@ parseLoop:
 	return args, nil
 }
 
+// main execution function. Returns the last commands output, its function id and possible error
 func (k *Kittla) executeCore(cb *codeBlock) ([]byte, funcId, error) {
 
 	var res []byte
@@ -337,6 +346,8 @@ func (k *Kittla) executeCore(cb *codeBlock) ([]byte, funcId, error) {
 	return res, prevFunc, err
 }
 
+// Executes a program. Returns the last commands output, the function id and possible error.
+// A wrapper function to handle break & continue errors and codeBlock creation
 func (k *Kittla) Execute(prog string) ([]byte, funcId, error) {
 	res, funcId, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
 	if err == nil {

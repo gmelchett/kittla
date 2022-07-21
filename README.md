@@ -63,7 +63,7 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   * Pre evaluation with []
   * Post evaulation with {}
   * String ""
-  * Escape codes like, \n etc
+  * Escape codes like, \n etc - but not yet Unicode nor hex escapes
   * Comment with #
   * Long lines joined with \ as last char before new line
 
@@ -74,7 +74,7 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   * decr -- subtract value from variable
   * else
   * elseif
-  * expr -- Calling "github.com/tidwall/expr" for a answer
+  * expr -- Calling github.com/tidwall/expr for an answer
   * if
   * incr -- increase variable with
   * puts -- print

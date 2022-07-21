@@ -4,6 +4,8 @@ import "sort"
 
 // Helper functions for the kittla shell
 
+// Counts the number of unclosed [] and {} pairs and make sure that
+// there is an even number of ". Escaped characters are taken into account.
 func (k *Kittla) GetNumUnclosed(prog string) int {
 
 	cb := &codeBlock{code: prog, lineNum: 1}
@@ -54,6 +56,8 @@ func (k *Kittla) GetNumUnclosed(prog string) int {
 	return totDepth
 }
 
+// Fetches a list of all commands plus variables. Returned alphabetically sorted.
+// Useful for shell tab completion
 func (k *Kittla) Names() []string {
 
 	names := make([]string, 0, 1024)

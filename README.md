@@ -77,6 +77,7 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   * expr -- Calling github.com/tidwall/expr for an answer
   * if
   * incr -- increase variable with
+  * loop -- like `while {true}`
   * puts -- print
   * set -- declare variable
   * unknown -- Called if command isn't known
@@ -86,7 +87,7 @@ Currently declaring own commands (or overloading) isn't supported.
 
 ## Future plans
 
-Usually, I don't have plans for my hobby projects. I work on them as long as I find it fun.
+As usual, I don't have plans for my hobby projects. I work on them as long as I find it fun.
 
 ## License
 MIT

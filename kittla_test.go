@@ -245,6 +245,12 @@ var parserTests = []parserTest{
 			"tot": "50",
 		},
 	},
+	{
+		program: "set l 0; ; loop { inc l; if {$l > 5} { break }}",
+		expects: map[string]string{
+			"l": "6",
+		},
+	},
 }
 
 func TestParser(t *testing.T) {

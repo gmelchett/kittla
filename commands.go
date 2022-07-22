@@ -18,6 +18,7 @@ const (
 	CMD_EVAL
 	CMD_IF
 	CMD_INC
+	CMD_LOOP
 	CMD_PRINT
 	CMD_UNKNOWN
 	CMD_VAR
@@ -88,6 +89,13 @@ var builtinCommands = []command{
 		maxArgs: 2,
 		id:      CMD_INC,
 		fn:      cmdIncDec,
+	},
+	command{
+		names:   []string{"loop"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_LOOP,
+		fn:      cmdLoop,
 	},
 	command{
 		names:   []string{"print", "puts"},
@@ -222,6 +230,10 @@ func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error
 	return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, string(args[0]), k.currLine)
 }
 
+func cmdLoop(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+	return cmdWhile(k, cmdId, cmd, args)
+}
+
 func cmdPrint(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 	fmt.Println(string(args[0]))
 	return args[0], nil
@@ -256,21 +268,32 @@ func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error)
 
 	var res []byte
 
+	loopBodyIdx := 1
+	if cmdId == CMD_LOOP {
+		loopBodyIdx = 0
+	}
+
 	for {
-		whileArg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
+		var err error
+		executeBody := true
 
-		if err != nil {
-			return nil, err
+		if cmdId == CMD_WHILE {
+			whileArg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
+
+			if err != nil {
+				return nil, err
+			}
+
+			w, err := exprJoin(whileArg)
+
+			if err != nil {
+				return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
+			}
+			executeBody = w.Bool()
 		}
 
-		w, err := exprJoin(whileArg)
-
-		if err != nil {
-			return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
-		}
-
-		if w.Bool() {
-			res, _, err = k.executeCore(&codeBlock{code: string(args[1]), lineNum: k.currLine})
+		if executeBody {
+			res, _, err = k.executeCore(&codeBlock{code: string(args[loopBodyIdx]), lineNum: k.currLine})
 			if err != nil {
 				return nil, err
 			}

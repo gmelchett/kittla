@@ -114,13 +114,14 @@ func (cb *codeBlock) untilBrackedEnd() ([]byte, error) {
 }
 
 type frame struct {
-	prevFunc funcId
-	ifTaken  bool // Changed if prevFunc == FUNC_IF || FUNC_ELIF
-	objects  map[string][]byte
+	prevCmd cmdId
+	ifTaken bool // Changed if prevCmd == CMD_IF || CMD_ELIF
+	objects map[string][]byte
 }
 
+// Kittla instance
 type Kittla struct {
-	functions map[string]*function
+	commands  map[string]*command
 	currLine  int
 	frames    []*frame
 	currFrame *frame
@@ -129,9 +130,9 @@ type Kittla struct {
 	isBreak    bool // Set until break is handled
 }
 
-// Returns a new instance of the kittla language
+// New returns a new instance of the kittla language
 func New() *Kittla {
-	k := &Kittla{functions: getFuncMap()}
+	k := &Kittla{commands: getCmdMap()}
 	k.currFrame = &frame{objects: make(map[string][]byte)}
 	return k
 }
@@ -139,20 +140,20 @@ func New() *Kittla {
 // Execute one parsed command. First entry in args is the command. Might be recursive in case of
 // more complex commands like if {} {body}.
 func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
-	fName := string(args[0])
+	cmdName := string(args[0])
 
-	if fn, present := k.functions[fName]; present {
-		if fn.minArgs != -1 && len(args[1:]) < fn.minArgs {
-			return nil, fmt.Errorf("%s must have at least %d argument(s). Line: %d", fName, fn.minArgs, k.currLine)
+	if cmd, present := k.commands[cmdName]; present {
+		if cmd.minArgs != -1 && len(args[1:]) < cmd.minArgs {
+			return nil, fmt.Errorf("%s must have at least %d argument(s). Line: %d", cmdName, cmd.minArgs, k.currLine)
 		}
-		if fn.maxArgs != -1 && len(args[1:]) > fn.maxArgs {
-			return nil, fmt.Errorf("%s must have at most %d argument(s). Line: %d", fName, fn.maxArgs, k.currLine)
+		if cmd.maxArgs != -1 && len(args[1:]) > cmd.maxArgs {
+			return nil, fmt.Errorf("%s must have at most %d argument(s). Line: %d", cmdName, cmd.maxArgs, k.currLine)
 		}
-		defer func() { k.currFrame.prevFunc = fn.funcId }()
-		return fn.fn(k, fn.funcId, fName, args[1:])
+		defer func() { k.currFrame.prevCmd = cmd.id }()
+		return cmd.fn(k, cmd.id, cmdName, args[1:])
 
 	}
-	return k.functions["unknown"].fn(k, FUNC_UNKNOWN, fName, args[1:])
+	return k.commands["unknown"].fn(k, CMD_UNKNOWN, cmdName, args[1:])
 }
 
 // Expands any $name to the actual value.
@@ -313,8 +314,8 @@ parseLoop:
 	return args, nil
 }
 
-// main execution function. Returns the last commands output, its function id and possible error
-func (k *Kittla) executeCore(cb *codeBlock) ([]byte, funcId, error) {
+// main execution command. Returns the last commands output, its command id and possible error
+func (k *Kittla) executeCore(cb *codeBlock) ([]byte, cmdId, error) {
 
 	var res []byte
 	var args [][]byte
@@ -338,25 +339,25 @@ func (k *Kittla) executeCore(cb *codeBlock) ([]byte, funcId, error) {
 			}
 		}
 	}
-	prevFunc := k.currFrame.prevFunc
+	prevCmd := k.currFrame.prevCmd
 
 	k.currFrame = k.frames[len(k.frames)-1]
 	k.frames = k.frames[:len(k.frames)-1]
 
-	return res, prevFunc, err
+	return res, prevCmd, err
 }
 
-// Executes a program. Returns the last commands output, the function id and possible error.
+// Executes a program. Returns the last commands output, the command id and possible error.
 // A wrapper function to handle break & continue errors and codeBlock creation
-func (k *Kittla) Execute(prog string) ([]byte, funcId, error) {
-	res, funcId, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
+func (k *Kittla) Execute(prog string) ([]byte, cmdId, error) {
+	res, cmdId, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
 	if err == nil {
 		if k.isBreak {
-			return nil, funcId, fmt.Errorf("Unhandled break")
+			return nil, cmdId, fmt.Errorf("Unhandled break")
 		}
 		if k.isContinue {
-			return nil, funcId, fmt.Errorf("Unhandled continue")
+			return nil, cmdId, fmt.Errorf("Unhandled continue")
 		}
 	}
-	return res, funcId, err
+	return res, cmdId, err
 }

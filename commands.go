@@ -7,142 +7,142 @@ import (
 	"github.com/tidwall/expr"
 )
 
-type funcId int
+type cmdId int
 
 const (
-	FUNC_BREAK funcId = iota
-	FUNC_DEC
-	FUNC_CONTINUE
-	FUNC_ELIF
-	FUNC_ELSE
-	FUNC_EVAL
-	FUNC_IF
-	FUNC_INC
-	FUNC_PRINT
-	FUNC_UNKNOWN
-	FUNC_VAR
-	FUNC_WHILE
+	CMD_BREAK cmdId = iota
+	CMD_DEC
+	CMD_CONTINUE
+	CMD_ELIF
+	CMD_ELSE
+	CMD_EVAL
+	CMD_IF
+	CMD_INC
+	CMD_PRINT
+	CMD_UNKNOWN
+	CMD_VAR
+	CMD_WHILE
 )
 
-type function struct {
+type command struct {
 	names   []string
 	minArgs int
 	maxArgs int
-	funcId  funcId
-	fn      func(*Kittla, funcId, string, [][]byte) ([]byte, error)
+	id      cmdId
+	fn      func(*Kittla, cmdId, string, [][]byte) ([]byte, error)
 }
 
-var builtinFunctions = []function{
-	function{
+var builtinCommands = []command{
+	command{
 		names:   []string{"break"},
 		minArgs: 0,
 		maxArgs: 0,
-		funcId:  FUNC_BREAK,
-		fn:      funcBreakContinue,
+		id:      CMD_BREAK,
+		fn:      cmdBreakContinue,
 	},
-	function{
+	command{
 		names:   []string{"continue"},
 		minArgs: 0,
 		maxArgs: 0,
-		funcId:  FUNC_CONTINUE,
-		fn:      funcBreakContinue,
+		id:      CMD_CONTINUE,
+		fn:      cmdBreakContinue,
 	},
-	function{
+	command{
 		names:   []string{"dec", "decr"},
 		minArgs: 1,
 		maxArgs: 2,
-		funcId:  FUNC_DEC,
-		fn:      funcIncDec,
+		id:      CMD_DEC,
+		fn:      cmdIncDec,
 	},
-	function{
+	command{
 		names:   []string{"elif", "elseif"},
 		minArgs: 2,
 		maxArgs: 2,
-		funcId:  FUNC_ELIF,
-		fn:      funcElIf,
+		id:      CMD_ELIF,
+		fn:      cmdElIf,
 	},
-	function{
+	command{
 		names:   []string{"else"},
 		minArgs: 1,
 		maxArgs: 1,
-		funcId:  FUNC_ELSE,
-		fn:      funcElse,
+		id:      CMD_ELSE,
+		fn:      cmdElse,
 	},
-	function{
+	command{
 		names:   []string{"eval", "expr"},
 		minArgs: 1,
 		maxArgs: -1,
-		funcId:  FUNC_EVAL,
-		fn:      funcEval,
+		id:      CMD_EVAL,
+		fn:      cmdEval,
 	},
-	function{
+	command{
 		names:   []string{"if"},
 		minArgs: 2,
 		maxArgs: 2,
-		funcId:  FUNC_IF,
-		fn:      funcIf,
+		id:      CMD_IF,
+		fn:      cmdIf,
 	},
-	function{
+	command{
 		names:   []string{"inc", "incr"},
 		minArgs: 1,
 		maxArgs: 2,
-		funcId:  FUNC_INC,
-		fn:      funcIncDec,
+		id:      CMD_INC,
+		fn:      cmdIncDec,
 	},
-	function{
+	command{
 		names:   []string{"print", "puts"},
 		minArgs: 0,
 		maxArgs: 1,
-		funcId:  FUNC_PRINT,
-		fn:      funcPrint,
+		id:      CMD_PRINT,
+		fn:      cmdPrint,
 	},
-	function{
+	command{
 		names:   []string{"unknown"},
 		minArgs: -1,
 		maxArgs: -1,
-		funcId:  FUNC_UNKNOWN,
-		fn:      funcUnknown,
+		id:      CMD_UNKNOWN,
+		fn:      cmdUnknown,
 	},
-	function{
+	command{
 		names:   []string{"var", "set"},
 		minArgs: 1,
 		maxArgs: 2,
-		funcId:  FUNC_VAR,
-		fn:      funcVar,
+		id:      CMD_VAR,
+		fn:      cmdVar,
 	},
-	function{
+	command{
 		names:   []string{"while"},
 		minArgs: 2,
 		maxArgs: 2,
-		funcId:  FUNC_WHILE,
-		fn:      funcWhile,
+		id:      CMD_WHILE,
+		fn:      cmdWhile,
 	},
 }
 
-func funcBreakContinue(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
-	switch funcId {
-	case FUNC_BREAK:
+func cmdBreakContinue(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+	switch cmdId {
+	case CMD_BREAK:
 		k.isBreak = true
-	case FUNC_CONTINUE:
+	case CMD_CONTINUE:
 		k.isContinue = true
 	}
 	return nil, nil
 }
 
-func funcElIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdElIf(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 
-	if k.currFrame.prevFunc != FUNC_IF && k.currFrame.prevFunc != FUNC_ELIF {
+	if k.currFrame.prevCmd != CMD_IF && k.currFrame.prevCmd != CMD_ELIF {
 		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
 	}
 
 	if !k.currFrame.ifTaken {
-		return funcIf(k, FUNC_IF, "if", args)
+		return cmdIf(k, CMD_IF, "if", args)
 	}
 	return nil, nil
 }
 
-func funcElse(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
-	if k.currFrame.prevFunc != FUNC_IF && k.currFrame.prevFunc != FUNC_ELIF {
+func cmdElse(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+	if k.currFrame.prevCmd != CMD_IF && k.currFrame.prevCmd != CMD_ELIF {
 		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
 	}
 
@@ -163,7 +163,7 @@ func exprJoin(args [][]byte) (expr.Value, error) {
 	return expr.Eval(string(joined), nil)
 }
 
-func funcEval(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdEval(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 	if res, err := exprJoin(args); err == nil {
 		return []byte(res.String()), nil
 	} else {
@@ -171,7 +171,7 @@ func funcEval(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, erro
 	}
 }
 
-func funcIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdIf(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 
 	ifarg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
 	if err != nil {
@@ -194,7 +194,7 @@ func funcIf(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error)
 	return []byte(""), nil
 }
 
-func funcIncDec(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 	d := 1
 	if len(args) == 2 {
 		if v, err := strconv.ParseInt(string(args[1]), 0, 64); err == nil {
@@ -207,7 +207,7 @@ func funcIncDec(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, er
 	if v, present := k.currFrame.objects[string(args[0])]; present {
 		if vv, err := strconv.ParseInt(string(v), 0, 64); err == nil {
 			var s []byte
-			if funcId == FUNC_INC {
+			if cmdId == CMD_INC {
 				s = []byte(fmt.Sprintf("%d", int(vv)+d))
 			} else {
 				s = []byte(fmt.Sprintf("%d", int(vv)-d))
@@ -222,12 +222,12 @@ func funcIncDec(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, er
 	return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, string(args[0]), k.currLine)
 }
 
-func funcPrint(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdPrint(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 	fmt.Println(string(args[0]))
 	return args[0], nil
 }
 
-func funcVar(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdVar(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 	var result []byte
 	varName := string(args[0])
 	switch len(args) {
@@ -248,11 +248,11 @@ func funcVar(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error
 	return result, nil
 }
 
-func funcUnknown(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdUnknown(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 	return nil, fmt.Errorf("Unknown command: %s. Line: %d", cmd, k.currLine)
 }
 
-func funcWhile(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, error) {
+func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 
 	var res []byte
 
@@ -289,15 +289,15 @@ func funcWhile(k *Kittla, funcId funcId, cmd string, args [][]byte) ([]byte, err
 	return res, nil
 }
 
-func getFuncMap() map[string]*function {
+func getCmdMap() map[string]*command {
 
-	funcMap := make(map[string]*function)
+	cmdMap := make(map[string]*command)
 
-	for i := range builtinFunctions {
-		for j := range builtinFunctions[i].names {
-			funcMap[builtinFunctions[i].names[j]] = &builtinFunctions[i]
+	for i := range builtinCommands {
+		for j := range builtinCommands[i].names {
+			cmdMap[builtinCommands[i].names[j]] = &builtinCommands[i]
 		}
 
 	}
-	return funcMap
+	return cmdMap
 }

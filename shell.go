@@ -62,9 +62,9 @@ func (k *Kittla) Names() []string {
 
 	names := make([]string, 0, 1024)
 
-	for i := range k.functions {
-		for j := range k.functions[i].names {
-			names = append(names, k.functions[i].names[j])
+	for i := range k.commands {
+		for j := range k.commands[i].names {
+			names = append(names, k.commands[i].names[j])
 		}
 	}
 

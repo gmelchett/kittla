@@ -97,7 +97,7 @@ mainloop:
 
 			if depth := k.GetNumUnclosed(prog.String()); depth == 0 {
 				if res, lastFunc, err := k.Execute(prog.String()); err == nil {
-					if lastFunc != kittla.FUNC_PRINT {
+					if lastFunc != kittla.CMD_PRINT {
 						fmt.Println(string(res))
 					}
 				} else {
@@ -127,7 +127,7 @@ mainloop:
 
 func execute(prog string) {
 	if res, lastFunc, err := kittla.New().Execute(prog); err == nil {
-		if lastFunc != kittla.FUNC_PRINT {
+		if lastFunc != kittla.CMD_PRINT {
 			fmt.Println(string(res))
 		}
 	} else {

@@ -247,7 +247,7 @@ var parserTests = []parserTest{
 	},
 }
 
-func Testparser(t *testing.T) {
+func TestParser(t *testing.T) {
 
 	for i, te := range parserTests {
 		k := New()

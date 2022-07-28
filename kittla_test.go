@@ -57,8 +57,8 @@ func TestParse(t *testing.T) {
 		}
 
 		for j := range tests[i].args {
-			if string(tests[i].args[j]) != string(args[j]) {
-				t.Logf("Expected arg(%d): *%s* got: *%s*. Test: %d\n", j, string(tests[i].args[j]), string(args[j]), i)
+			if string(tests[i].args[j]) != string(args[j].toBytes()) {
+				t.Logf("Expected arg(%d): *%s* got: *%s*. Test: %d\n", j, string(tests[i].args[j]), string(args[j].toBytes()), i)
 				t.Fail()
 				return
 			}
@@ -251,6 +251,82 @@ var parserTests = []parserTest{
 			"l": "6",
 		},
 	},
+
+	{
+		program: "set l 0; ; inc l 100;",
+		expects: map[string]string{
+			"l": "100",
+		},
+	},
+
+	{
+		program: "set l 0; ; inc l",
+		expects: map[string]string{
+			"l": "1",
+		},
+	},
+	{
+		program: "set l 0.0; ; inc l 1.0",
+		expects: map[string]string{
+			"l": "1.000000",
+		},
+	},
+	{
+		program: "set l 1.2; ; inc l",
+		expects: map[string]string{
+			"l": "2.200000",
+		},
+	},
+	{
+		program: "set l 1.2; ; inc l 1;",
+		fails:   true,
+		expects: map[string]string{
+			"l": "1.200000",
+		},
+	},
+	{
+		program: "set l 1; ; inc l 0.1;",
+		fails:   true,
+		expects: map[string]string{
+			"l": "1",
+		},
+	},
+	{
+		program: "set l [int 7.5]",
+		expects: map[string]string{
+			"l": "7",
+		},
+	},
+	{
+		program: "set l [int \"7.5\"]",
+		expects: map[string]string{
+			"l": "7",
+		},
+	},
+	{
+		program: "set l [int 7]",
+		expects: map[string]string{
+			"l": "7",
+		},
+	},
+	{
+		program: "set l [float 7]",
+		expects: map[string]string{
+			"l": "7.000000",
+		},
+	},
+	{
+		program: "set l [float 7.5]",
+		expects: map[string]string{
+			"l": "7.500000",
+		},
+	},
+	{
+		program: "set l [float \"7.5\"]",
+		expects: map[string]string{
+			"l": "7.500000",
+		},
+	},
 }
 
 func TestParser(t *testing.T) {
@@ -265,16 +341,17 @@ func TestParser(t *testing.T) {
 		}
 
 		if len(k.currFrame.objects) != len(te.expects) {
-			t.Logf("Objects mismatch, got: %d wanted: %d\n", len(k.currFrame.objects), len(te.expects))
+			t.Logf("Test: %d Objects mismatch, got: %d wanted: %d\n", i, len(k.currFrame.objects), len(te.expects))
 			spew.Dump(k.currFrame.objects)
 			spew.Dump(te.expects)
 			t.Fail()
 			return
 		}
 		for k, v := range k.currFrame.objects {
-			if ev, present := te.expects[string(k)]; present && string(v) != ev {
-				t.Logf("Content of \"%s\" mismatch. Got \"%s\" wanted %s\n",
-					string(k), string(v), ev)
+			if ev, present := te.expects[string(k)]; present && string(v.toBytes()) != ev {
+				t.Logf("Test: %d Content of \"%s\" mismatch. Got \"%s\" wanted %s\n",
+					i,
+					string(k), string(v.toBytes()), ev)
 				t.Fail()
 				return
 			} else if !present {

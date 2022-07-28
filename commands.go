@@ -16,8 +16,10 @@ const (
 	CMD_ELIF
 	CMD_ELSE
 	CMD_EVAL
+	CMD_FLOAT
 	CMD_IF
 	CMD_INC
+	CMD_INT
 	CMD_LOOP
 	CMD_PRINT
 	CMD_UNKNOWN
@@ -30,95 +32,109 @@ type command struct {
 	minArgs int
 	maxArgs int
 	id      cmdId
-	fn      func(*Kittla, cmdId, string, [][]byte) ([]byte, error)
+	fn      func(*Kittla, cmdId, string, []*obj) (*obj, error)
 }
 
 var builtinCommands = []command{
-	command{
+	{
 		names:   []string{"break"},
 		minArgs: 0,
 		maxArgs: 0,
 		id:      CMD_BREAK,
 		fn:      cmdBreakContinue,
 	},
-	command{
+	{
 		names:   []string{"continue"},
 		minArgs: 0,
 		maxArgs: 0,
 		id:      CMD_CONTINUE,
 		fn:      cmdBreakContinue,
 	},
-	command{
+	{
 		names:   []string{"dec", "decr"},
 		minArgs: 1,
 		maxArgs: 2,
 		id:      CMD_DEC,
 		fn:      cmdIncDec,
 	},
-	command{
+	{
 		names:   []string{"elif", "elseif"},
 		minArgs: 2,
 		maxArgs: 2,
 		id:      CMD_ELIF,
 		fn:      cmdElIf,
 	},
-	command{
+	{
 		names:   []string{"else"},
 		minArgs: 1,
 		maxArgs: 1,
 		id:      CMD_ELSE,
 		fn:      cmdElse,
 	},
-	command{
+	{
 		names:   []string{"eval", "expr"},
 		minArgs: 1,
 		maxArgs: -1,
 		id:      CMD_EVAL,
 		fn:      cmdEval,
 	},
-	command{
+	{
+		names:   []string{"float"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_FLOAT,
+		fn:      cmdFloat,
+	},
+	{
 		names:   []string{"if"},
 		minArgs: 2,
 		maxArgs: 2,
 		id:      CMD_IF,
 		fn:      cmdIf,
 	},
-	command{
+	{
 		names:   []string{"inc", "incr"},
 		minArgs: 1,
 		maxArgs: 2,
 		id:      CMD_INC,
 		fn:      cmdIncDec,
 	},
-	command{
+	{
+		names:   []string{"int"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_INT,
+		fn:      cmdInt,
+	},
+	{
 		names:   []string{"loop"},
 		minArgs: 1,
 		maxArgs: 1,
 		id:      CMD_LOOP,
 		fn:      cmdLoop,
 	},
-	command{
+	{
 		names:   []string{"print", "puts"},
 		minArgs: 0,
 		maxArgs: 1,
 		id:      CMD_PRINT,
 		fn:      cmdPrint,
 	},
-	command{
+	{
 		names:   []string{"unknown"},
 		minArgs: -1,
 		maxArgs: -1,
 		id:      CMD_UNKNOWN,
 		fn:      cmdUnknown,
 	},
-	command{
+	{
 		names:   []string{"var", "set"},
 		minArgs: 1,
 		maxArgs: 2,
 		id:      CMD_VAR,
 		fn:      cmdVar,
 	},
-	command{
+	{
 		names:   []string{"while"},
 		minArgs: 2,
 		maxArgs: 2,
@@ -127,7 +143,7 @@ var builtinCommands = []command{
 	},
 }
 
-func cmdBreakContinue(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdBreakContinue(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	switch cmdId {
 	case CMD_BREAK:
 		k.isBreak = true
@@ -137,7 +153,7 @@ func cmdBreakContinue(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte
 	return nil, nil
 }
 
-func cmdElIf(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdElIf(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 
 	if k.currFrame.prevCmd != CMD_IF && k.currFrame.prevCmd != CMD_ELIF {
 		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
@@ -149,39 +165,86 @@ func cmdElIf(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) 
 	return nil, nil
 }
 
-func cmdElse(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdElse(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	if k.currFrame.prevCmd != CMD_IF && k.currFrame.prevCmd != CMD_ELIF {
 		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
 	}
 
 	if !k.currFrame.ifTaken {
-		res, _, err := k.executeCore(&codeBlock{code: string(args[0]), lineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine})
 		return res, err
 	}
 	return nil, nil
 }
 
-func exprJoin(args [][]byte) (expr.Value, error) {
+func exprJoin(args []*obj) (*obj, error) {
 
 	joined := make([]byte, 0, 256)
 	for i := range args {
-		joined = append(joined, args[i]...)
+		joined = append(joined, args[i].toBytes()...)
 	}
 
-	return expr.Eval(string(joined), nil)
+	v, err := expr.Eval(string(joined), nil)
+	if err != nil {
+		return nil, err
+	}
+	switch v.Value().(type) {
+	case bool:
+		return &obj{valType: valTypeBool, valBool: v.Bool()}, nil
+	case float64:
+		// Is there a better way to see if a float fits in an int?
+		if float64(int(v.Float64())) != v.Float64() {
+			return &obj{valType: valTypeFloat, valFloat: v.Float64()}, nil
+		}
+		// why can't I have a fallthrough here?
+		return &obj{valType: valTypeInt, valInt: int(v.Int64())}, nil
+	case int64:
+		return &obj{valType: valTypeInt, valInt: int(v.Int64())}, nil
+	case uint64:
+		return &obj{valType: valTypeInt, valInt: int(v.Uint64())}, nil
+	case string:
+		return &obj{valType: valTypeStr, valStr: []byte(v.String())}, nil
+	default:
+		return nil, fmt.Errorf("expr.Value() returns unknown type: %v", v.Value())
+	}
 }
 
-func cmdEval(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdEval(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	if res, err := exprJoin(args); err == nil {
-		return []byte(res.String()), nil
+		return res, nil
 	} else {
 		return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
 	}
 }
 
-func cmdIf(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdFloat(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+	switch args[0].valType {
+	case valTypeFloat:
+		return args[0], nil
+	case valTypeInt:
+		args[0].valType = valTypeFloat
+		args[0].valFloat = float64(args[0].valInt)
+		return args[0], nil
+	case valTypeBool:
+		return nil, fmt.Errorf("Can't convert boolean to float. Line %d", k.currLine)
+	default:
+		if v, err := strconv.ParseInt(string(args[0].valStr), 0, 64); err == nil {
+			args[0].valType = valTypeFloat
+			args[0].valFloat = float64(v)
+			return args[0], nil
+		}
+		if v, err := strconv.ParseFloat(string(args[0].valStr), 64); err == nil {
+			args[0].valType = valTypeFloat
+			args[0].valFloat = v
+			return args[0], nil
+		}
+	}
+	return nil, fmt.Errorf("Can't convert string to float. Line %d", k.currLine)
+}
 
-	ifarg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
+func cmdIf(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+
+	ifarg, err := k.parse(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -192,81 +255,141 @@ func cmdIf(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
 		return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
 	}
 
-	k.currFrame.ifTaken = res.Bool()
+	k.currFrame.ifTaken = res.isTrue()
 
 	if k.currFrame.ifTaken {
-		res, _, err := k.executeCore(&codeBlock{code: string(args[1]), lineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: string(args[1].toBytes()), lineNum: k.currLine})
 		return res, err
 	}
 
-	return []byte(""), nil
+	return nil, nil
 }
 
-func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+
+	o, present := k.currFrame.objects[string(args[0].toBytes())]
+
+	if !present {
+		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, string(args[0].toBytes()), k.currLine)
+	}
+
+	if o.valType != valTypeInt && o.valType != valTypeFloat {
+		return nil, fmt.Errorf("First variable isn't a number. Line %d", k.currLine)
+	}
+
+	df := 1.0
 	d := 1
+
+	if cmdId == CMD_DEC {
+		df = -df
+		d = -d
+	}
+
 	if len(args) == 2 {
-		if v, err := strconv.ParseInt(string(args[1]), 0, 64); err == nil {
-			d = int(v)
-		} else {
-			return nil, fmt.Errorf("%s failed with %v. Line %d", cmd, err, k.currLine)
-		}
-	}
-
-	if v, present := k.currFrame.objects[string(args[0])]; present {
-		if vv, err := strconv.ParseInt(string(v), 0, 64); err == nil {
-			var s []byte
-			if cmdId == CMD_INC {
-				s = []byte(fmt.Sprintf("%d", int(vv)+d))
-			} else {
-				s = []byte(fmt.Sprintf("%d", int(vv)-d))
+		switch args[1].valType {
+		case valTypeInt:
+			if o.valType != valTypeInt {
+				return nil, fmt.Errorf("%s Mismatching types. Line %d", cmd, k.currLine)
 			}
-			k.currFrame.objects[string(args[0])] = s
-			return s, nil
-		} else {
-			return nil, fmt.Errorf("%s: Variable %s does not contain a number:  %v. Line %d", cmd, string(args[0]), err, k.currLine)
-		}
 
+			d = d * args[1].valInt
+		case valTypeFloat:
+			if o.valType != valTypeFloat {
+				return nil, fmt.Errorf("%s: Mismatching types. Line %d", cmd, k.currLine)
+			}
+
+			df = df * args[1].valFloat
+		case valTypeStr:
+			if v, err := strconv.ParseInt(string(args[1].toBytes()), 0, 64); err == nil {
+				if o.valType == valTypeFloat {
+					return nil, fmt.Errorf("%s converted to int can't be added to float. Line %d", cmd, k.currLine)
+				}
+				d = int(v)
+			} else if v, err := strconv.ParseFloat(string(args[1].toBytes()), 64); err == nil {
+				if o.valType == valTypeInt {
+					return nil, fmt.Errorf("%s converted to float can't be added to int. Line %d", cmd, k.currLine)
+				}
+				df = float64(v)
+			} else {
+				return nil, fmt.Errorf("first argument to %s isn't a number. Line %d", cmd, k.currLine)
+			}
+		case valTypeBool:
+			return nil, fmt.Errorf("Can't do `%s` with boolean. Line %d", cmd, k.currLine)
+		}
 	}
-	return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, string(args[0]), k.currLine)
+
+	switch o.valType {
+	case valTypeInt:
+		o.valInt += d
+		return o, nil
+	case valTypeFloat:
+		o.valFloat += df
+		return o, nil
+	}
+	return nil, fmt.Errorf("%s: Variable %s is not a number. Line %d", cmd, string(args[0].toBytes()), k.currLine)
 }
 
-func cmdLoop(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdInt(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+	switch args[0].valType {
+	case valTypeInt:
+		return args[0], nil
+	case valTypeFloat:
+		args[0].valType = valTypeInt
+		args[0].valInt = int(args[0].valFloat)
+		return args[0], nil
+	case valTypeBool:
+		return nil, fmt.Errorf("Can't convert boolean to integer. Line %d", k.currLine)
+	default:
+		if v, err := strconv.ParseInt(string(args[0].valStr), 0, 64); err == nil {
+			args[0].valType = valTypeInt
+			args[0].valInt = int(v)
+			return args[0], nil
+		}
+		if v, err := strconv.ParseFloat(string(args[0].valStr), 64); err == nil {
+			args[0].valType = valTypeInt
+			args[0].valInt = int(v)
+			return args[0], nil
+		}
+	}
+	return nil, fmt.Errorf("Can't convert string to integer. Line %d", k.currLine)
+}
+
+func cmdLoop(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return cmdWhile(k, cmdId, cmd, args)
 }
 
-func cmdPrint(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
-	fmt.Println(string(args[0]))
-	return args[0], nil
+func cmdPrint(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+	msg := args[0].toBytes()
+	fmt.Println(string(msg))
+	return &obj{valType: valTypeStr, valStr: msg}, nil
 }
 
-func cmdVar(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
-	var result []byte
-	varName := string(args[0])
+func cmdVar(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+	varName := string(args[0].toBytes())
 	switch len(args) {
 	case 0:
 		return nil, fmt.Errorf("%s command must be followed with one or two arguments. Line: %d", cmd, k.currLine)
 	case 1:
 		if v, present := k.currFrame.objects[varName]; present {
-			result = v
+			return v, nil
 		} else {
 			return nil, fmt.Errorf("%s: no such variable: %s. Line: %d", cmd, varName, k.currLine)
 		}
 	case 2:
-		k.currFrame.objects[varName] = args[1]
-		result = args[1]
+		k.currFrame.objects[varName] = args[1].optimize()
+		return k.currFrame.objects[varName], nil
 	default:
 		return nil, fmt.Errorf("%s command must be followed with at most two argument. Line: %d", cmd, k.currLine)
 	}
-	return result, nil
 }
 
-func cmdUnknown(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdUnknown(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return nil, fmt.Errorf("Unknown command: %s. Line: %d", cmd, k.currLine)
 }
 
-func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error) {
+func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 
-	var res []byte
+	var res *obj
 
 	loopBodyIdx := 1
 	if cmdId == CMD_LOOP {
@@ -278,7 +401,7 @@ func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error)
 		executeBody := true
 
 		if cmdId == CMD_WHILE {
-			whileArg, err := k.parse(&codeBlock{code: string(args[0]), lineNum: k.currLine}, false)
+			whileArg, err := k.parse(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine}, false)
 
 			if err != nil {
 				return nil, err
@@ -289,11 +412,11 @@ func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args [][]byte) ([]byte, error)
 			if err != nil {
 				return nil, fmt.Errorf("%s failed with: %v on line: %d", cmd, err, k.currLine)
 			}
-			executeBody = w.Bool()
+			executeBody = w.isTrue()
 		}
 
 		if executeBody {
-			res, _, err = k.executeCore(&codeBlock{code: string(args[loopBodyIdx]), lineNum: k.currLine})
+			res, _, err = k.executeCore(&codeBlock{code: string(args[loopBodyIdx].toBytes()), lineNum: k.currLine})
 			if err != nil {
 				return nil, err
 			}

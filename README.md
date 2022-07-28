@@ -66,17 +66,20 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   * Escape codes like, \n etc - but not yet Unicode nor hex escapes
   * Comment with #
   * Long lines joined with \ as last char before new line
+  * Internal objects are not strings, but `int`, `float`, `bool` or `string`
 
 ### Commands
   Currently using the Tcl naming, might change! (Some alias present)
   * break
   * continue
-  * decr -- subtract value from variable
+  * decr -- subtract value from variable. Notice I like type safety, therefore you can't subtract a float from an int and visa versa without conversion.
   * else
   * elseif
-  * expr -- Calling github.com/tidwall/expr for an answer
+  * expr -- Calling github.com/tidwall/expr for an answer. Should be dropped and replaced with native that does not work on strings...
+  * float -- Converts int and tries to convert string to a float.Booleans won't be converted.
   * if
-  * incr -- increase variable with
+  * incr -- increase variable with. Same rule as for dec.
+  * int -- Converts float or tries to convert string to int. Booleans won't be converted.
   * loop -- like `while {true}`
   * puts -- print
   * set -- declare variable
@@ -84,6 +87,7 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   * while
 
 Currently declaring own commands (or overloading) isn't supported.
+I'm leaning towards getting kittla more type-aware, since I kinda like it.
 
 ## Future plans
 

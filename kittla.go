@@ -2,121 +2,71 @@ package kittla
 
 import (
 	"fmt"
-	"log"
-	"runtime/debug"
+	"strconv"
 )
 
-type codeBlock struct {
-	code    string
-	idx     int
-	lineNum int
-	eof     bool
+type valueType int
+
+const (
+	valTypeInt valueType = iota
+	valTypeFloat
+	valTypeBool
+	valTypeStr
+)
+
+type obj struct {
+	valType  valueType
+	valInt   int
+	valFloat float64
+	valBool  bool
+	valStr   []byte
 }
 
-func isBlank(c byte) bool {
-	return c == ' ' || c == '\t'
-}
-
-// valid command start character
-func validStartChar(c byte) bool {
-	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'
-}
-
-// valid characters in command after first character
-func validChar(c byte) bool {
-	return validStartChar(c) || (c >= '0' && c <= '9')
-}
-
-// Get next character from input. Moves forward in buffer if peek = false.
-// Keeps track of current line number, and \ at end of line
-func (cb *codeBlock) nextPeek(peek bool) byte {
-	var c byte
-	if cb.eof {
-		debug.PrintStack()
-		log.Fatal("nextPeek past end!")
-		return 'X' // next/peek shouldn't be used at eof
+func (o *obj) toBytes() []byte {
+	if o == nil {
+		return nil
 	}
-
-	c = cb.code[cb.idx]
-
-	if peek {
-		if c == '\\' && cb.idx+1 < len(cb.code) && cb.code[cb.idx+1] == '\n' {
-			return ' '
-		}
-		return c
+	switch o.valType {
+	case valTypeInt:
+		return []byte(fmt.Sprintf("%d", o.valInt))
+	case valTypeFloat:
+		return []byte(fmt.Sprintf("%f", o.valFloat))
+	case valTypeBool:
+		return []byte(fmt.Sprintf("%t", o.valBool))
+	case valTypeStr:
+		return o.valStr
 	}
-
-	cb.idx++
-	cb.eof = cb.idx == len(cb.code)
-
-	// handle lines which ends with \ and translate to space
-	if !cb.eof && c == '\\' && cb.code[cb.idx] == '\n' {
-		cb.lineNum++
-		cb.idx++
-		c = ' '
-		cb.eof = cb.idx == len(cb.code)
-	} else if c == '\n' {
-		cb.lineNum++
-	}
-
-	return c
+	return nil
 }
 
-func (cb *codeBlock) next() byte {
-	return cb.nextPeek(false)
+func (o *obj) isTrue() bool {
+	return (o.valType == valTypeBool && o.valBool) || (o.valType == valTypeInt && o.valInt != 0)
 }
 
-func (cb *codeBlock) peek() byte {
-	return cb.nextPeek(true)
-}
-
-// scans forward until none blank or end-of-file
-func (cb *codeBlock) skipBlanks() {
-	for {
-		if cb.eof {
-			return
-		}
-
-		c := cb.peek()
-		if !isBlank(c) {
-			return
-		}
-
-		cb.next()
+func toObj(arg []byte) *obj {
+	if v, err := strconv.ParseInt(string(arg), 0, 64); err == nil {
+		return &obj{valType: valTypeInt, valInt: int(v)}
 	}
+	if v, err := strconv.ParseFloat(string(arg), 64); err == nil {
+		return &obj{valType: valTypeFloat, valFloat: v}
+	}
+	if v, err := strconv.ParseBool(string(arg)); err == nil {
+		return &obj{valType: valTypeBool, valBool: v}
+	}
+	return &obj{valType: valTypeStr, valStr: arg}
 }
 
-// Continues scanning forward until paired } shows up - or end of file.
-func (cb *codeBlock) untilBrackedEnd() ([]byte, error) {
-	res := make([]byte, 0, 256)
-	depth := 1
-	for {
-		c := cb.next()
-		if c == '\\' {
-			res = append(res, c)
-			res = append(res, cb.next())
-			continue
-		}
-
-		if c == '}' {
-			depth--
-			if depth == 0 {
-				return res, nil
-			}
-		} else if c == '{' {
-			depth++
-		}
-		res = append(res, c)
-		if cb.eof {
-			return nil, fmt.Errorf("Premature end of file. Line: %d", cb.lineNum)
-		}
+func (o *obj) optimize() *obj {
+	if o.valType == valTypeStr {
+		return toObj(o.valStr)
 	}
+	return o
 }
 
 type frame struct {
 	prevCmd cmdId
 	ifTaken bool // Changed if prevCmd == CMD_IF || CMD_ELIF
-	objects map[string][]byte
+	objects map[string]*obj
 }
 
 // Kittla instance
@@ -133,14 +83,14 @@ type Kittla struct {
 // New returns a new instance of the kittla language
 func New() *Kittla {
 	k := &Kittla{commands: getCmdMap()}
-	k.currFrame = &frame{objects: make(map[string][]byte)}
+	k.currFrame = &frame{objects: make(map[string]*obj)}
 	return k
 }
 
 // Execute one parsed command. First entry in args is the command. Might be recursive in case of
 // more complex commands like if {} {body}.
-func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
-	cmdName := string(args[0])
+func (k *Kittla) executeCmd(args []*obj) (*obj, error) {
+	cmdName := string(args[0].toBytes())
 
 	if cmd, present := k.commands[cmdName]; present {
 		if cmd.minArgs != -1 && len(args[1:]) < cmd.minArgs {
@@ -157,7 +107,7 @@ func (k *Kittla) executeCmd(args [][]byte) ([]byte, error) {
 }
 
 // Expands any $name to the actual value.
-func (k *Kittla) expandVar(cb *codeBlock) ([]byte, error) {
+func (k *Kittla) expandVar(cb *codeBlock) (*obj, error) {
 
 	var varName []byte
 	var err error
@@ -204,7 +154,7 @@ func (k *Kittla) expandVar(cb *codeBlock) ([]byte, error) {
 	return nil, fmt.Errorf("Unknown variable: %s Line: %d", string(varName), cb.lineNum)
 }
 
-func (k *Kittla) parse(cb *codeBlock, isPre bool) ([][]byte, error) {
+func (k *Kittla) parse(cb *codeBlock, isPre bool) ([]*obj, error) {
 
 	for {
 		cb.skipBlanks()
@@ -225,8 +175,30 @@ func (k *Kittla) parse(cb *codeBlock, isPre bool) ([][]byte, error) {
 		break
 	}
 
-	args := make([][]byte, 0, 256)
+	args := make([]*obj, 0, 256)
 	currArg := make([]byte, 0, 256)
+	var currObj *obj
+
+	appendResult := func(result *obj) {
+		if len(currArg) != 0 {
+			currArg = append(currArg, result.toBytes()...)
+		} else if currObj != nil {
+			currArg = append(currObj.toBytes(), result.toBytes()...)
+			currObj = nil
+		} else {
+			currObj = result
+		}
+	}
+
+	appendArg := func() {
+		if len(currArg) > 0 {
+			args = append(args, toObj(currArg))
+		} else if currObj != nil {
+			args = append(args, currObj)
+		}
+		currArg = make([]byte, 0, 256)
+		currObj = nil
+	}
 
 	insideString := false
 parseLoop:
@@ -275,7 +247,7 @@ parseLoop:
 			k.currLine = cb.lineNum
 			if largs, err := k.parse(cb, true); err == nil {
 				if result, err := k.executeCmd(largs); err == nil {
-					currArg = append(currArg, result...)
+					appendResult(result)
 				} else {
 					return nil, err
 				}
@@ -284,7 +256,7 @@ parseLoop:
 			}
 		case '$':
 			if result, err := k.expandVar(cb); err == nil {
-				currArg = append(currArg, result...)
+				appendResult(result)
 			} else {
 				return nil, err
 			}
@@ -297,10 +269,7 @@ parseLoop:
 
 		case ' ', '\t':
 			if !insideString {
-				if len(currArg) > 0 {
-					args = append(args, currArg)
-					currArg = make([]byte, 0, 256)
-				}
+				appendArg()
 			} else {
 				currArg = append(currArg, c)
 			}
@@ -308,17 +277,15 @@ parseLoop:
 			currArg = append(currArg, c)
 		}
 	}
-	if len(currArg) > 0 {
-		args = append(args, currArg)
-	}
+	appendArg()
 	return args, nil
 }
 
 // main execution command. Returns the last commands output, its command id and possible error
-func (k *Kittla) executeCore(cb *codeBlock) ([]byte, cmdId, error) {
+func (k *Kittla) executeCore(cb *codeBlock) (*obj, cmdId, error) {
 
-	var res []byte
-	var args [][]byte
+	var res *obj
+	var args []*obj
 	var err error
 
 	k.frames = append(k.frames, k.currFrame)
@@ -359,5 +326,5 @@ func (k *Kittla) Execute(prog string) ([]byte, cmdId, error) {
 			return nil, cmdId, fmt.Errorf("Unhandled continue")
 		}
 	}
-	return res, cmdId, err
+	return res.toBytes(), cmdId, err
 }

@@ -7,10 +7,10 @@ import (
 	"github.com/tidwall/expr"
 )
 
-type cmdId int
+type CmdID int
 
 const (
-	CMD_BREAK cmdId = iota
+	CMD_BREAK CmdID = iota
 	CMD_DEC
 	CMD_CONTINUE
 	CMD_ELIF
@@ -31,8 +31,8 @@ type command struct {
 	names   []string
 	minArgs int
 	maxArgs int
-	id      cmdId
-	fn      func(*Kittla, cmdId, string, []*obj) (*obj, error)
+	id      CmdID
+	fn      func(*Kittla, CmdID, string, []*obj) (*obj, error)
 }
 
 var builtinCommands = []command{
@@ -143,8 +143,8 @@ var builtinCommands = []command{
 	},
 }
 
-func cmdBreakContinue(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
-	switch cmdId {
+func cmdBreakContinue(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	switch cmdID {
 	case CMD_BREAK:
 		k.isBreak = true
 	case CMD_CONTINUE:
@@ -153,7 +153,7 @@ func cmdBreakContinue(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, er
 	return nil, nil
 }
 
-func cmdElIf(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdElIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 	if k.currFrame.prevCmd != CMD_IF && k.currFrame.prevCmd != CMD_ELIF {
 		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
@@ -165,7 +165,7 @@ func cmdElIf(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return nil, nil
 }
 
-func cmdElse(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdElse(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	if k.currFrame.prevCmd != CMD_IF && k.currFrame.prevCmd != CMD_ELIF {
 		return nil, fmt.Errorf("%s lacks if or else if. Line: %d", cmd, k.currLine)
 	}
@@ -209,7 +209,7 @@ func exprJoin(args []*obj) (*obj, error) {
 	}
 }
 
-func cmdEval(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdEval(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	if res, err := exprJoin(args); err == nil {
 		return res, nil
 	} else {
@@ -217,7 +217,7 @@ func cmdEval(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	}
 }
 
-func cmdFloat(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdFloat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	switch args[0].valType {
 	case valTypeFloat:
 		return args[0], nil
@@ -242,7 +242,7 @@ func cmdFloat(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return nil, fmt.Errorf("Can't convert string to float. Line %d", k.currLine)
 }
 
-func cmdIf(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 	ifarg, err := k.parse(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine}, false)
 	if err != nil {
@@ -265,7 +265,7 @@ func cmdIf(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return nil, nil
 }
 
-func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdIncDec(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 	o, present := k.currFrame.objects[string(args[0].toBytes())]
 
@@ -280,7 +280,7 @@ func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	df := 1.0
 	d := 1
 
-	if cmdId == CMD_DEC {
+	if cmdID == CMD_DEC {
 		df = -df
 		d = -d
 	}
@@ -329,7 +329,7 @@ func cmdIncDec(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return nil, fmt.Errorf("%s: Variable %s is not a number. Line %d", cmd, string(args[0].toBytes()), k.currLine)
 }
 
-func cmdInt(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdInt(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	switch args[0].valType {
 	case valTypeInt:
 		return args[0], nil
@@ -354,17 +354,17 @@ func cmdInt(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return nil, fmt.Errorf("Can't convert string to integer. Line %d", k.currLine)
 }
 
-func cmdLoop(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
-	return cmdWhile(k, cmdId, cmd, args)
+func cmdLoop(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	return cmdWhile(k, cmdID, cmd, args)
 }
 
-func cmdPrint(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdPrint(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	msg := args[0].toBytes()
 	fmt.Println(string(msg))
 	return &obj{valType: valTypeStr, valStr: msg}, nil
 }
 
-func cmdVar(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdVar(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	varName := string(args[0].toBytes())
 	switch len(args) {
 	case 0:
@@ -383,16 +383,16 @@ func cmdVar(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	}
 }
 
-func cmdUnknown(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdUnknown(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	return nil, fmt.Errorf("Unknown command: %s. Line: %d", cmd, k.currLine)
 }
 
-func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
+func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 	var res *obj
 
 	loopBodyIdx := 1
-	if cmdId == CMD_LOOP {
+	if cmdID == CMD_LOOP {
 		loopBodyIdx = 0
 	}
 
@@ -400,7 +400,7 @@ func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 		var err error
 		executeBody := true
 
-		if cmdId == CMD_WHILE {
+		if cmdID == CMD_WHILE {
 			whileArg, err := k.parse(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine}, false)
 
 			if err != nil {

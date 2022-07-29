@@ -65,7 +65,7 @@ func (o *obj) optimize() *obj {
 }
 
 type frame struct {
-	prevCmd cmdId
+	prevCmd CmdID
 	ifTaken bool // Changed if prevCmd == CMD_IF || CMD_ELIF
 	objects map[string]*obj
 }
@@ -303,7 +303,7 @@ parseLoop:
 }
 
 // main execution command. Returns the last commands output, its command id and possible error
-func (k *Kittla) executeCore(cb *codeBlock) (*obj, cmdId, error) {
+func (k *Kittla) executeCore(cb *codeBlock) (*obj, CmdID, error) {
 
 	var res *obj
 	var args []*obj
@@ -337,15 +337,15 @@ func (k *Kittla) executeCore(cb *codeBlock) (*obj, cmdId, error) {
 
 // Executes a program. Returns the last commands output, the command id and possible error.
 // A wrapper function to handle break & continue errors and codeBlock creation
-func (k *Kittla) Execute(prog string) ([]byte, cmdId, error) {
-	res, cmdId, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
+func (k *Kittla) Execute(prog string) ([]byte, CmdID, error) {
+	res, cmdID, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
 	if err == nil {
 		if k.isBreak {
-			return nil, cmdId, fmt.Errorf("Unhandled break")
+			return nil, cmdID, fmt.Errorf("Unhandled break")
 		}
 		if k.isContinue {
-			return nil, cmdId, fmt.Errorf("Unhandled continue")
+			return nil, cmdID, fmt.Errorf("Unhandled continue")
 		}
 	}
-	return res.toBytes(), cmdId, err
+	return res.toBytes(), cmdID, err
 }

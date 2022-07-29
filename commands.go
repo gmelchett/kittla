@@ -435,13 +435,13 @@ func cmdWhile(k *Kittla, cmdId cmdId, cmd string, args []*obj) (*obj, error) {
 	return res, nil
 }
 
-func getCmdMap() map[string]*command {
+func getCmdMap() map[string][]*command {
 
-	cmdMap := make(map[string]*command)
+	cmdMap := make(map[string][]*command)
 
 	for i := range builtinCommands {
 		for j := range builtinCommands[i].names {
-			cmdMap[builtinCommands[i].names[j]] = &builtinCommands[i]
+			cmdMap[builtinCommands[i].names[j]] = append(cmdMap[builtinCommands[i].names[j]], &builtinCommands[i])
 		}
 
 	}

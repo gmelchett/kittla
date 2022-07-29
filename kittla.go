@@ -2,6 +2,7 @@ package kittla
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 )
 
@@ -71,7 +72,7 @@ type frame struct {
 
 // Kittla instance
 type Kittla struct {
-	commands  map[string]*command
+	commands  map[string][]*command
 	currLine  int
 	frames    []*frame
 	currFrame *frame
@@ -93,17 +94,37 @@ func (k *Kittla) executeCmd(args []*obj) (*obj, error) {
 	cmdName := string(args[0].toBytes())
 
 	if cmd, present := k.commands[cmdName]; present {
-		if cmd.minArgs != -1 && len(args[1:]) < cmd.minArgs {
-			return nil, fmt.Errorf("%s must have at least %d argument(s). Line: %d", cmdName, cmd.minArgs, k.currLine)
-		}
-		if cmd.maxArgs != -1 && len(args[1:]) > cmd.maxArgs {
-			return nil, fmt.Errorf("%s must have at most %d argument(s). Line: %d", cmdName, cmd.maxArgs, k.currLine)
-		}
-		defer func() { k.currFrame.prevCmd = cmd.id }()
-		return cmd.fn(k, cmd.id, cmdName, args[1:])
+		minArgs := math.MaxInt
+		maxArgs := 0
 
+		for i := range cmd {
+			if cmd[i].minArgs < minArgs {
+				minArgs = cmd[i].minArgs
+			}
+			if cmd[i].maxArgs > maxArgs || cmd[i].maxArgs == -1 {
+				if maxArgs != -1 {
+					maxArgs = cmd[i].maxArgs
+				}
+			}
+
+			if cmd[i].minArgs == -1 || len(args[1:]) >= cmd[i].minArgs {
+				if cmd[i].maxArgs == -1 || len(args[1:]) <= cmd[i].maxArgs {
+					defer func() { k.currFrame.prevCmd = cmd[i].id }()
+					return cmd[i].fn(k, cmd[i].id, cmdName, args[1:])
+				}
+			}
+		}
+		if minArgs != -1 && len(args[1:]) < minArgs {
+			return nil, fmt.Errorf("%s must have atleast %d arguments. Got %d. Line: %d", cmdName, minArgs, len(args[1:]), k.currLine)
+		}
+
+		if maxArgs != -1 && len(args[1:]) > maxArgs {
+			return nil, fmt.Errorf("%s must have at most %d arguments. Got %d. Line: %d", cmdName, maxArgs, len(args[1:]), k.currLine)
+		}
+
+		return nil, fmt.Errorf("%s wrong number of arguments. Line: %d", cmdName, k.currLine)
 	}
-	return k.commands["unknown"].fn(k, CMD_UNKNOWN, cmdName, args[1:])
+	return k.commands["unknown"][0].fn(k, CMD_UNKNOWN, cmdName, args[1:])
 }
 
 // Expands any $name to the actual value.

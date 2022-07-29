@@ -171,7 +171,7 @@ func cmdElse(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	}
 
 	if !k.currFrame.ifTaken {
-		res, _, err := k.executeCore(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: args[0].toString(), lineNum: k.currLine})
 		return res, err
 	}
 	return nil, nil
@@ -244,7 +244,7 @@ func cmdFloat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 func cmdIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
-	ifarg, err := k.parse(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine}, false)
+	ifarg, err := k.parse(&codeBlock{code: args[0].toString(), lineNum: k.currLine}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func cmdIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	k.currFrame.ifTaken = res.isTrue()
 
 	if k.currFrame.ifTaken {
-		res, _, err := k.executeCore(&codeBlock{code: string(args[1].toBytes()), lineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: args[1].toString(), lineNum: k.currLine})
 		return res, err
 	}
 
@@ -267,10 +267,10 @@ func cmdIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 func cmdIncDec(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
-	o, present := k.currFrame.objects[string(args[0].toBytes())]
+	o, present := k.currFrame.objects[args[0].toString()]
 
 	if !present {
-		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, string(args[0].toBytes()), k.currLine)
+		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, args[0].toString(), k.currLine)
 	}
 
 	if o.valType != valTypeInt && o.valType != valTypeFloat {
@@ -300,12 +300,12 @@ func cmdIncDec(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 			df = df * args[1].valFloat
 		case valTypeStr:
-			if v, err := strconv.ParseInt(string(args[1].toBytes()), 0, 64); err == nil {
+			if v, err := strconv.ParseInt(args[1].toString(), 0, 64); err == nil {
 				if o.valType == valTypeFloat {
 					return nil, fmt.Errorf("%s converted to int can't be added to float. Line %d", cmd, k.currLine)
 				}
 				d = int(v)
-			} else if v, err := strconv.ParseFloat(string(args[1].toBytes()), 64); err == nil {
+			} else if v, err := strconv.ParseFloat(args[1].toString(), 64); err == nil {
 				if o.valType == valTypeInt {
 					return nil, fmt.Errorf("%s converted to float can't be added to int. Line %d", cmd, k.currLine)
 				}
@@ -326,7 +326,7 @@ func cmdIncDec(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		o.valFloat += df
 		return o, nil
 	}
-	return nil, fmt.Errorf("%s: Variable %s is not a number. Line %d", cmd, string(args[0].toBytes()), k.currLine)
+	return nil, fmt.Errorf("%s: Variable %s is not a number. Line %d", cmd, args[0].toString(), k.currLine)
 }
 
 func cmdInt(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -365,7 +365,7 @@ func cmdPrint(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 }
 
 func cmdVar(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
-	varName := string(args[0].toBytes())
+	varName := args[0].toString()
 	switch len(args) {
 	case 0:
 		return nil, fmt.Errorf("%s command must be followed with one or two arguments. Line: %d", cmd, k.currLine)
@@ -401,7 +401,7 @@ func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		executeBody := true
 
 		if cmdID == CMD_WHILE {
-			whileArg, err := k.parse(&codeBlock{code: string(args[0].toBytes()), lineNum: k.currLine}, false)
+			whileArg, err := k.parse(&codeBlock{code: args[0].toString(), lineNum: k.currLine}, false)
 
 			if err != nil {
 				return nil, err
@@ -416,7 +416,7 @@ func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		}
 
 		if executeBody {
-			res, _, err = k.executeCore(&codeBlock{code: string(args[loopBodyIdx].toBytes()), lineNum: k.currLine})
+			res, _, err = k.executeCore(&codeBlock{code: args[loopBodyIdx].toString(), lineNum: k.currLine})
 			if err != nil {
 				return nil, err
 			}

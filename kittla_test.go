@@ -57,8 +57,8 @@ func TestParse(t *testing.T) {
 		}
 
 		for j := range tests[i].args {
-			if string(tests[i].args[j]) != string(args[j].toBytes()) {
-				t.Logf("Expected arg(%d): *%s* got: *%s*. Test: %d\n", j, string(tests[i].args[j]), string(args[j].toBytes()), i)
+			if string(tests[i].args[j]) != args[j].toString() {
+				t.Logf("Expected arg(%d): *%s* got: *%s*. Test: %d\n", j, string(tests[i].args[j]), args[j].toString(), i)
 				t.Fail()
 				return
 			}
@@ -348,10 +348,10 @@ func TestParser(t *testing.T) {
 			return
 		}
 		for k, v := range k.currFrame.objects {
-			if ev, present := te.expects[string(k)]; present && string(v.toBytes()) != ev {
+			if ev, present := te.expects[string(k)]; present && v.toString() != ev {
 				t.Logf("Test: %d Content of \"%s\" mismatch. Got \"%s\" wanted %s\n",
 					i,
-					string(k), string(v.toBytes()), ev)
+					string(k), v.toString(), ev)
 				t.Fail()
 				return
 			} else if !present {

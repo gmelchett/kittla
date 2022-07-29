@@ -39,6 +39,9 @@ func (o *obj) toBytes() []byte {
 	}
 	return nil
 }
+func (o *obj) toString() string {
+	return string(o.toBytes())
+}
 
 func (o *obj) isTrue() bool {
 	return (o.valType == valTypeBool && o.valBool) || (o.valType == valTypeInt && o.valInt != 0)
@@ -91,7 +94,7 @@ func New() *Kittla {
 // Execute one parsed command. First entry in args is the command. Might be recursive in case of
 // more complex commands like if {} {body}.
 func (k *Kittla) executeCmd(args []*obj) (*obj, error) {
-	cmdName := string(args[0].toBytes())
+	cmdName := args[0].toString()
 
 	if cmd, present := k.commands[cmdName]; present {
 		minArgs := math.MaxInt

@@ -16,6 +16,7 @@ type testParseData struct {
 func TestParse(t *testing.T) {
 
 	tests := []testParseData{
+		{"{}", []string{""}, false},
 		{"5;", []string{"5"}, false},
 		{"hej5;", []string{"hej5"}, false},
 		{"hej", []string{"hej"}, false},

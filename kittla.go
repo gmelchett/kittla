@@ -202,6 +202,7 @@ func (k *Kittla) parse(cb *codeBlock, isPre bool) ([]*obj, error) {
 	args := make([]*obj, 0, 256)
 	currArg := make([]byte, 0, 256)
 	var currObj *obj
+	appendEmpty := false
 
 	appendResult := func(result *obj) {
 		if len(currArg) != 0 {
@@ -219,7 +220,10 @@ func (k *Kittla) parse(cb *codeBlock, isPre bool) ([]*obj, error) {
 			args = append(args, toObj(currArg))
 		} else if currObj != nil {
 			args = append(args, currObj)
+		} else if appendEmpty {
+			args = append(args, toObj(currArg))
 		}
+		appendEmpty = false
 		currArg = make([]byte, 0, 256)
 		currObj = nil
 	}
@@ -286,6 +290,8 @@ parseLoop:
 			}
 		case '{':
 			if result, err := cb.untilBrackedEnd(); err == nil {
+				// {} is a valid object
+				appendEmpty = true
 				currArg = append(currArg, result...)
 			} else {
 				return nil, err

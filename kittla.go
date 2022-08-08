@@ -3,6 +3,7 @@ package kittla
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 )
 
@@ -13,14 +14,29 @@ const (
 	valTypeFloat
 	valTypeBool
 	valTypeStr
+	valTypeFn
 )
 
 type obj struct {
-	valType  valueType
+	valType valueType
+
 	valInt   int
 	valFloat float64
 	valBool  bool
 	valStr   []byte
+	valFn    *command
+}
+
+func (o *obj) clone() *obj {
+	oc := &obj{
+		valType:  o.valType,
+		valInt:   o.valInt,
+		valFloat: o.valFloat,
+		valBool:  o.valBool,
+		valStr:   make([]byte, cap(o.valStr)),
+	}
+	copy(oc.valStr, o.valStr)
+	return oc
 }
 
 func (o *obj) toBytes() []byte {
@@ -36,6 +52,8 @@ func (o *obj) toBytes() []byte {
 		return []byte(fmt.Sprintf("%t", o.valBool))
 	case valTypeStr:
 		return o.valStr
+	case valTypeFn:
+		return o.valFn.body.toBytes()
 	}
 	return nil
 }
@@ -82,11 +100,14 @@ type Kittla struct {
 
 	isContinue bool // Set until continue is handled
 	isBreak    bool // Set until break is handled
+	isReturn   bool // set until return is handled
+
+	nextFnId CmdID
 }
 
 // New returns a new instance of the kittla language
 func New() *Kittla {
-	k := &Kittla{commands: getCmdMap()}
+	k := &Kittla{commands: getCmdMap(), nextFnId: CMD_END_OF_BUILT_IN + 1}
 	k.currFrame = &frame{objects: make(map[string]*obj)}
 	return k
 }
@@ -96,38 +117,57 @@ func New() *Kittla {
 func (k *Kittla) executeCmd(args []*obj) (*obj, error) {
 	cmdName := args[0].toString()
 
-	if cmd, present := k.commands[cmdName]; present {
-		minArgs := math.MaxInt
-		maxArgs := 0
+	var cmd []*command
+	var present bool
+	var ano bool
 
-		for i := range cmd {
-			if cmd[i].minArgs < minArgs {
-				minArgs = cmd[i].minArgs
-			}
-			if cmd[i].maxArgs > maxArgs || cmd[i].maxArgs == -1 {
-				if maxArgs != -1 {
-					maxArgs = cmd[i].maxArgs
-				}
-			}
-
-			if cmd[i].minArgs == -1 || len(args[1:]) >= cmd[i].minArgs {
-				if cmd[i].maxArgs == -1 || len(args[1:]) <= cmd[i].maxArgs {
-					defer func() { k.currFrame.prevCmd = cmd[i].id }()
-					return cmd[i].fn(k, cmd[i].id, cmdName, args[1:])
-				}
-			}
-		}
-		if minArgs != -1 && len(args[1:]) < minArgs {
-			return nil, fmt.Errorf("%s must have atleast %d arguments. Got %d. Line: %d", cmdName, minArgs, len(args[1:]), k.currLine)
-		}
-
-		if maxArgs != -1 && len(args[1:]) > maxArgs {
-			return nil, fmt.Errorf("%s must have at most %d arguments. Got %d. Line: %d", cmdName, maxArgs, len(args[1:]), k.currLine)
-		}
-
-		return nil, fmt.Errorf("%s wrong number of arguments. Line: %d", cmdName, k.currLine)
+	if o, exists := k.currFrame.objects[cmdName]; exists && k.currFrame.objects[cmdName].valType == valTypeFn {
+		cmd = []*command{o.valFn}
+		present = true
+		ano = true
+	} else {
+		cmd, present = k.commands[cmdName]
 	}
-	return k.commands["unknown"][0].fn(k, CMD_UNKNOWN, cmdName, args[1:])
+
+	if !present {
+		return k.commands["unknown"][0].fn(k, CMD_UNKNOWN, cmdName, args[1:])
+	}
+
+	minArgs := math.MaxInt
+	maxArgs := 0
+
+	for i := range cmd {
+		if cmd[i].minArgs < minArgs {
+			minArgs = cmd[i].minArgs
+		}
+		if cmd[i].maxArgs > maxArgs || cmd[i].maxArgs == -1 {
+			if maxArgs != -1 {
+				maxArgs = cmd[i].maxArgs
+			}
+		}
+
+		if cmd[i].minArgs == -1 || len(args[1:]) >= cmd[i].minArgs {
+			if cmd[i].maxArgs == -1 || len(args[1:]) <= cmd[i].maxArgs {
+				defer func() { k.currFrame.prevCmd = cmd[i].id }()
+				if !ano {
+					return cmd[i].fn(k, cmd[i].id, cmdName, args[1:])
+				} else {
+					return call(k, cmd[0], cmdName, args[1:])
+				}
+			}
+		}
+	}
+
+	if minArgs != -1 && len(args[1:]) < minArgs {
+		return nil, fmt.Errorf("%s must have atleast %d arguments. Got %d. Line: %d", cmdName, minArgs, len(args[1:]), k.currLine)
+	}
+
+	if maxArgs != -1 && len(args[1:]) > maxArgs {
+		return nil, fmt.Errorf("%s must have at most %d arguments. Got %d. Line: %d", cmdName, maxArgs, len(args[1:]), k.currLine)
+	}
+
+	return nil, fmt.Errorf("%s wrong number of arguments. Line: %d", cmdName, k.currLine)
+
 }
 
 // Expands any $name to the actual value.
@@ -179,6 +219,10 @@ func (k *Kittla) expandVar(cb *codeBlock) (*obj, error) {
 }
 
 func (k *Kittla) parse(cb *codeBlock, isPre bool) ([]*obj, error) {
+
+	if len(cb.code) == 0 {
+		return nil, nil
+	}
 
 	for {
 		cb.skipBlanks()
@@ -312,14 +356,16 @@ parseLoop:
 }
 
 // main execution command. Returns the last commands output, its command id and possible error
-func (k *Kittla) executeCore(cb *codeBlock) (*obj, CmdID, error) {
+func (k *Kittla) executeCore(cb *codeBlock, pushFrame bool) (*obj, CmdID, error) {
 
 	var res *obj
 	var args []*obj
 	var err error
 
-	k.frames = append(k.frames, k.currFrame)
-	k.currFrame = &frame{objects: k.currFrame.objects}
+	if pushFrame {
+		k.frames = append(k.frames, k.currFrame)
+		k.currFrame = &frame{objects: k.currFrame.objects}
+	}
 
 	k.currLine = cb.lineNum
 
@@ -334,12 +380,18 @@ func (k *Kittla) executeCore(cb *codeBlock) (*obj, CmdID, error) {
 			if k.isBreak || k.isContinue {
 				break
 			}
+			if k.isReturn {
+				k.isReturn = false
+				break
+			}
 		}
 	}
 	prevCmd := k.currFrame.prevCmd
 
-	k.currFrame = k.frames[len(k.frames)-1]
-	k.frames = k.frames[:len(k.frames)-1]
+	if pushFrame {
+		k.currFrame = k.frames[len(k.frames)-1]
+		k.frames = k.frames[:len(k.frames)-1]
+	}
 
 	return res, prevCmd, err
 }
@@ -347,7 +399,7 @@ func (k *Kittla) executeCore(cb *codeBlock) (*obj, CmdID, error) {
 // Executes a program. Returns the last commands output, the command id and possible error.
 // A wrapper function to handle break & continue errors and codeBlock creation
 func (k *Kittla) Execute(prog string) ([]byte, CmdID, error) {
-	res, cmdID, err := k.executeCore(&codeBlock{code: prog, lineNum: 1})
+	res, cmdID, err := k.executeCore(&codeBlock{code: prog, lineNum: 1}, true)
 	if err == nil {
 		if k.isBreak {
 			return nil, cmdID, fmt.Errorf("Unhandled break")
@@ -355,6 +407,10 @@ func (k *Kittla) Execute(prog string) ([]byte, CmdID, error) {
 		if k.isContinue {
 			return nil, cmdID, fmt.Errorf("Unhandled continue")
 		}
+		if k.isReturn {
+			os.Exit(0)
+		}
+
 	}
 	return res.toBytes(), cmdID, err
 }

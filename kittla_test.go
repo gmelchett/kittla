@@ -165,6 +165,13 @@ var parserTests = []parserTest{
 			"b": "67",
 		},
 	},
+	{
+		program: "set a 1; inc a 5; set b 66; inc b $a",
+		expects: map[string]string{
+			"a": "6",
+			"b": "72",
+		},
+	},
 
 	{
 		program: "set ii 1; set b 66; while {$ii < 10} {inc ii; inc b 1}",
@@ -326,6 +333,85 @@ var parserTests = []parserTest{
 		program: "set l [float \"7.5\"]",
 		expects: map[string]string{
 			"l": "7.500000",
+		},
+	},
+	{
+		program: "fn test {} {set b 1;}; set a [test];",
+		expects: map[string]string{
+			"a": "1",
+		},
+	},
+	{
+		program: "fn test {a} {set b $a;}; set a [test 5];",
+		expects: map[string]string{
+			"a": "5",
+		},
+	},
+	{
+		program: "fn test {b} {set b 7;}; set a [test 5];",
+		expects: map[string]string{
+			"a": "7",
+		},
+	},
+
+	{
+		program: "fn test {a {c 4}} {inc a $c;}; set a [test 5];",
+		expects: map[string]string{
+			"a": "9",
+		},
+	},
+	{
+		program: "fn test {a {c 4}} {inc a $c;}; set a [test 5 3];",
+		expects: map[string]string{
+			"a": "8",
+		},
+	},
+	{
+		program: "fn test {a {c 4}} {inc a $c;}; set a [test];",
+		fails:   true,
+	},
+	{
+		program: "fn test {a {c 4}} {inc a $c;}; set a [test 1 2 3];",
+		fails:   true,
+	},
+
+	{
+		program: "fn test {} {return 1;}; set a [test];",
+		expects: map[string]string{
+			"a": "1",
+		},
+	},
+	{
+		program: "fn test {a} {set b $a;return 2;}; set a [test 77];",
+		expects: map[string]string{
+			"a": "2",
+		},
+	},
+
+	{
+		program: "fn test {a} {set b $a;return 2;}; fn test {a b} {set b $a;return 3;}; set a [test 77 8];",
+		expects: map[string]string{
+			"a": "3",
+		},
+	},
+	{
+		program: "fn test {a} {set b $a;return 2;}; fn test {a b} {set b $a;return 3;}; set a [test 77];",
+		expects: map[string]string{
+			"a": "2",
+		},
+	},
+
+	{
+		program: "fn test {} {return 2;return 3;return 4}; set a [test];",
+		expects: map[string]string{
+			"a": "2",
+		},
+	},
+	{
+		program: "set hello [fn {} {return 2;}]; set a [hello];",
+		expects: map[string]string{
+			"a":     "2",
+			"hello": "return 2;",
 		},
 	},
 }

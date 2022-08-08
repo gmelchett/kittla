@@ -17,14 +17,18 @@ const (
 	CMD_ELSE
 	CMD_EVAL
 	CMD_FLOAT
+	CMD_FN
 	CMD_IF
 	CMD_INC
 	CMD_INT
 	CMD_LOOP
 	CMD_PRINT
+	CMD_RETURN
 	CMD_UNKNOWN
 	CMD_VAR
 	CMD_WHILE
+
+	CMD_END_OF_BUILT_IN
 )
 
 type command struct {
@@ -33,6 +37,10 @@ type command struct {
 	maxArgs int
 	id      CmdID
 	fn      func(*Kittla, CmdID, string, []*obj) (*obj, error)
+
+	// For commands in kittla
+	args []*obj
+	body *obj
 }
 
 var builtinCommands = []command{
@@ -86,6 +94,13 @@ var builtinCommands = []command{
 		fn:      cmdFloat,
 	},
 	{
+		names:   []string{"fn"},
+		minArgs: 2,
+		maxArgs: 3,
+		id:      CMD_FN,
+		fn:      cmdFn,
+	},
+	{
 		names:   []string{"if"},
 		minArgs: 2,
 		maxArgs: 2,
@@ -121,6 +136,14 @@ var builtinCommands = []command{
 		fn:      cmdPrint,
 	},
 	{
+		names:   []string{"return"},
+		minArgs: 0,
+		maxArgs: 1,
+		id:      CMD_RETURN,
+		fn:      cmdReturn,
+	},
+
+	{
 		names:   []string{"unknown"},
 		minArgs: -1,
 		maxArgs: -1,
@@ -141,6 +164,65 @@ var builtinCommands = []command{
 		id:      CMD_WHILE,
 		fn:      cmdWhile,
 	},
+}
+
+func call(k *Kittla, fn *command, cmd string, args []*obj) (*obj, error) {
+
+	k.frames = append(k.frames, k.currFrame)
+	newFrame := &frame{objects: make(map[string]*obj), prevCmd: fn.id}
+
+	i := 0
+	for i = 0; i < len(args); i++ {
+		a, err := k.parse(&codeBlock{code: fn.args[i].toString(), lineNum: k.currLine}, false)
+		if err != nil || len(a) == 0 {
+			return nil, fmt.Errorf("%s has a malformed argument. Line: %d", cmd, k.currLine)
+		}
+		newFrame.objects[a[0].toString()] = args[i].clone()
+	}
+
+	for ; i < len(fn.args); i++ {
+		a, err := k.parse(&codeBlock{code: fn.args[i].toString(), lineNum: k.currLine}, false)
+		if err != nil || len(a) == 0 {
+			return nil, fmt.Errorf("%s has a malformed argument. Line: %d", cmd, k.currLine)
+		}
+		newFrame.objects[a[0].toString()] = a[1]
+	}
+
+	k.currFrame = newFrame
+
+	res, _, err := k.executeCore(&codeBlock{code: fn.body.toString(), lineNum: k.currLine}, false)
+
+	k.currFrame = k.frames[len(k.frames)-1]
+	k.frames = k.frames[:len(k.frames)-1]
+
+	return res, err
+}
+
+func callFn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+
+	var fn *command
+
+	for i := range k.commands[cmd] {
+		if k.commands[cmd][i].id == cmdID {
+			fn = k.commands[cmd][i]
+			break
+		}
+	}
+
+	if fn == nil {
+		return nil, fmt.Errorf("Eeeh, there is no command with that id. Line: %d", k.currLine)
+	}
+
+	if len(args) < fn.minArgs {
+		return nil, fmt.Errorf("Too few arguments. Got %d wants %d. Line: %d", len(args), fn.minArgs, k.currLine)
+	}
+
+	if len(args) > fn.maxArgs {
+		return nil, fmt.Errorf("Too many arguments. Got %d wants %d. Line: %d", len(args), fn.maxArgs, k.currLine)
+	}
+
+	return call(k, fn, cmd, args)
+
 }
 
 func cmdBreakContinue(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -171,7 +253,7 @@ func cmdElse(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	}
 
 	if !k.currFrame.ifTaken {
-		res, _, err := k.executeCore(&codeBlock{code: args[0].toString(), lineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: args[0].toString(), lineNum: k.currLine}, true)
 		return res, err
 	}
 	return nil, nil
@@ -242,6 +324,67 @@ func cmdFloat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	return nil, fmt.Errorf("Can't convert string to float. Line %d", k.currLine)
 }
 
+func cmdFn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+
+	var fnName string
+	argIdx := 1
+	bodyIdx := 2
+
+	if len(args) == 3 {
+		fnName = args[0].toString()
+	} else { // == 2
+		argIdx--
+		bodyIdx--
+	}
+
+	errFnName := func() string {
+		if fnName == "" {
+			return "anonymous command"
+		} else {
+			return "command " + fnName
+		}
+	}
+
+	fnArgs, err := k.parse(&codeBlock{code: args[argIdx].toString(), lineNum: k.currLine}, false)
+	if err != nil {
+		return nil, fmt.Errorf("Parsing arguments of %s failed with: %s. Line: %d", errFnName(), err, k.currLine)
+	}
+
+	minArgs := 0
+	for i := range fnArgs {
+		arg, err := k.parse(&codeBlock{code: fnArgs[i].toString(), lineNum: k.currLine}, false)
+		if err != nil {
+			return nil, fmt.Errorf("Parsing argument \"%s\" of %s failed with: %s. Line: %d", fnArgs[i].toString(), errFnName(), err, k.currLine)
+
+		}
+
+		if len(arg) == 1 {
+			minArgs++
+		}
+	}
+
+	cmdObj := &command{names: []string{fnName}, minArgs: minArgs, maxArgs: len(fnArgs), id: k.nextFnId, fn: callFn,
+		args: fnArgs, body: args[bodyIdx]}
+	k.nextFnId++
+
+	if fnName != "" {
+		replaced := false
+		for i := range k.commands[fnName] {
+			if k.commands[fnName][i].minArgs == cmdObj.minArgs &&
+				k.commands[fnName][i].maxArgs == cmdObj.maxArgs {
+				k.commands[fnName][i] = cmdObj
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			k.commands[fnName] = append([]*command{cmdObj}, k.commands[fnName]...)
+		}
+	}
+
+	return &obj{valType: valTypeFn, valFn: cmdObj}, nil
+}
+
 func cmdIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 	ifarg, err := k.parse(&codeBlock{code: args[0].toString(), lineNum: k.currLine}, false)
@@ -258,7 +401,7 @@ func cmdIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	k.currFrame.ifTaken = res.isTrue()
 
 	if k.currFrame.ifTaken {
-		res, _, err := k.executeCore(&codeBlock{code: args[1].toString(), lineNum: k.currLine})
+		res, _, err := k.executeCore(&codeBlock{code: args[1].toString(), lineNum: k.currLine}, true)
 		return res, err
 	}
 
@@ -364,6 +507,27 @@ func cmdPrint(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	return &obj{valType: valTypeStr, valStr: msg}, nil
 }
 
+func cmdReturn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+
+	if len(args) == 0 {
+		return &obj{}, nil
+	}
+	if res, err := k.parse(&codeBlock{code: args[0].toString(), lineNum: k.currLine}, false); err == nil {
+		k.isReturn = true
+		if len(res) == 1 {
+			return res[0], nil
+		} else {
+			return nil, fmt.Errorf("Too many objects to return. Line: %d", k.currLine)
+		}
+	} else {
+		return nil, fmt.Errorf("Failed return given object: %v", err)
+	}
+}
+
+func cmdUnknown(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	return nil, fmt.Errorf("Unknown command: %s. Line: %d", cmd, k.currLine)
+}
+
 func cmdVar(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	varName := args[0].toString()
 	switch len(args) {
@@ -381,10 +545,6 @@ func cmdVar(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	default:
 		return nil, fmt.Errorf("%s command must be followed with at most two argument. Line: %d", cmd, k.currLine)
 	}
-}
-
-func cmdUnknown(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
-	return nil, fmt.Errorf("Unknown command: %s. Line: %d", cmd, k.currLine)
 }
 
 func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -416,7 +576,7 @@ func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		}
 
 		if executeBody {
-			res, _, err = k.executeCore(&codeBlock{code: args[loopBodyIdx].toString(), lineNum: k.currLine})
+			res, _, err = k.executeCore(&codeBlock{code: args[loopBodyIdx].toString(), lineNum: k.currLine}, true)
 			if err != nil {
 				return nil, err
 			}

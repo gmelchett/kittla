@@ -414,6 +414,70 @@ var parserTests = []parserTest{
 			"hello": "return 2;",
 		},
 	},
+	{
+		program: "set a [list 1 2 3];set b [len a];",
+		expects: map[string]string{
+			"a": "(1, 2, 3)",
+			"b": "3",
+		},
+	},
+	{
+		program: "set b [width 1234];",
+		expects: map[string]string{
+			"b": "4",
+		},
+	},
+
+	{
+		program: "set a [list];set b [len a];",
+		expects: map[string]string{
+			"a": "()",
+			"b": "0",
+		},
+	},
+	{
+		program: "set a [list 1]; append a 2 3;set b [len a];",
+		expects: map[string]string{
+			"a": "(1, 2, 3)",
+			"b": "3",
+		},
+	},
+	{
+		program: "set a hej; set a [concat $a \" hopp\"];set b [width $a];",
+		expects: map[string]string{
+			"a": "hej hopp",
+			"b": "8",
+		},
+	},
+	{
+		program: "set a 1; set a [concat $a 2];set b [width $a];",
+		expects: map[string]string{
+			"a": "12",
+			"b": "2",
+		},
+	},
+
+	{
+		program: "set a [width abcdef];",
+		expects: map[string]string{
+			"a": "6",
+		},
+	},
+	{
+		program: "set a [list 1 2 3]; set b [last a]",
+		expects: map[string]string{
+			"a": "(1, 2, 3)",
+			"b": "3",
+		},
+	},
+	{
+		program: "set k 3; set a [list 1 2 $k]; set c [last a]",
+		expects: map[string]string{
+			"a": "(1, 2, 3)",
+			"c": "3",
+			"k": "3",
+		},
+	},
 }
 
 func TestParser(t *testing.T) {
@@ -439,6 +503,7 @@ func TestParser(t *testing.T) {
 				t.Logf("Test: %d Content of \"%s\" mismatch. Got \"%s\" wanted %s\n",
 					i,
 					string(k), v.toString(), ev)
+				t.Logf("Test: %s\n", te.program)
 				t.Fail()
 				return
 			} else if !present {

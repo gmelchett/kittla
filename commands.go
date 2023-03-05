@@ -3,6 +3,7 @@ package kittla
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/tidwall/expr"
 )
@@ -10,24 +11,30 @@ import (
 type CmdID int
 
 const (
-	CMD_BREAK CmdID = iota
+	CMD_APPEND CmdID = iota
+	CMD_BREAK
 	CMD_DEC
+	CMD_CONCAT
 	CMD_CONTINUE
 	CMD_ELIF
 	CMD_ELSE
 	CMD_EVAL
+	CMD_FIRST
 	CMD_FLOAT
 	CMD_FN
 	CMD_IF
 	CMD_INC
 	CMD_INT
+	CMD_LAST
+	CMD_LIST
+	CMD_LEN
 	CMD_LOOP
 	CMD_PRINT
 	CMD_RETURN
 	CMD_UNKNOWN
 	CMD_VAR
 	CMD_WHILE
-
+	CMD_WIDTH
 	CMD_END_OF_BUILT_IN
 )
 
@@ -45,11 +52,25 @@ type command struct {
 
 var builtinCommands = []command{
 	{
+		names:   []string{"append"},
+		minArgs: 1,
+		maxArgs: -1,
+		id:      CMD_APPEND,
+		fn:      cmdAppend,
+	},
+	{
 		names:   []string{"break"},
 		minArgs: 0,
 		maxArgs: 0,
 		id:      CMD_BREAK,
 		fn:      cmdBreakContinue,
+	},
+	{
+		names:   []string{"concat"},
+		minArgs: 1,
+		maxArgs: -1,
+		id:      CMD_CONCAT,
+		fn:      cmdConcat,
 	},
 	{
 		names:   []string{"continue"},
@@ -87,6 +108,13 @@ var builtinCommands = []command{
 		fn:      cmdEval,
 	},
 	{
+		names:   []string{"first"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_FIRST,
+		fn:      cmdFirst,
+	},
+	{
 		names:   []string{"float"},
 		minArgs: 1,
 		maxArgs: 1,
@@ -120,6 +148,27 @@ var builtinCommands = []command{
 		maxArgs: 1,
 		id:      CMD_INT,
 		fn:      cmdInt,
+	},
+	{
+		names:   []string{"last"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_LAST,
+		fn:      cmdLast,
+	},
+	{
+		names:   []string{"len"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_LEN,
+		fn:      cmdLen,
+	},
+	{
+		names:   []string{"list"},
+		minArgs: 0,
+		maxArgs: -1,
+		id:      CMD_LIST,
+		fn:      cmdList,
 	},
 	{
 		names:   []string{"loop"},
@@ -163,6 +212,13 @@ var builtinCommands = []command{
 		maxArgs: 2,
 		id:      CMD_WHILE,
 		fn:      cmdWhile,
+	},
+	{
+		names:   []string{"width"},
+		minArgs: 1,
+		maxArgs: 1,
+		id:      CMD_WIDTH,
+		fn:      cmdWidth,
 	},
 }
 
@@ -225,6 +281,22 @@ func callFn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 }
 
+func cmdAppend(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	o, present := k.currFrame.objects[args[0].toString()]
+
+	if !present {
+		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, args[0].toString(), k.currLine)
+	}
+
+	if o.valType == valTypeList {
+		for i := 1; i < len(args); i++ {
+			o.valList = append(o.valList, args[i].clone())
+		}
+		return o, nil
+	}
+	return nil, fmt.Errorf("%s: Can't append given object. Can only append to lists. Line %d", cmd, k.currLine)
+}
+
 func cmdBreakContinue(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	switch cmdID {
 	case CMD_BREAK:
@@ -233,6 +305,15 @@ func cmdBreakContinue(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, er
 		k.isContinue = true
 	}
 	return nil, nil
+}
+
+func cmdConcat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+
+	var b strings.Builder
+	for i := range args {
+		b.WriteString(args[i].toString())
+	}
+	return &obj{valType: valTypeStr, valStr: []byte(b.String())}, nil
 }
 
 func cmdElIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -299,6 +380,22 @@ func cmdEval(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	}
 }
 
+func cmdFirst(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	o, present := k.currFrame.objects[args[0].toString()]
+
+	if !present {
+		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, args[0].toString(), k.currLine)
+	}
+	if o.valType == valTypeList {
+		if len(o.valList) > 0 {
+			return o.valList[0].clone(), nil
+		} else {
+			return nil, fmt.Errorf("%s: list is empty. Line %d", cmd, k.currLine)
+		}
+	}
+	return nil, fmt.Errorf("%s: Given object isn't a list. Line %d", cmd, k.currLine)
+}
+
 func cmdFloat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	switch args[0].valType {
 	case valTypeFloat:
@@ -308,7 +405,7 @@ func cmdFloat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		args[0].valFloat = float64(args[0].valInt)
 		return args[0], nil
 	case valTypeBool:
-		return nil, fmt.Errorf("Can't convert boolean to float. Line %d", k.currLine)
+		return nil, fmt.Errorf("%s: Can't convert boolean to float. Line %d", cmd, k.currLine)
 	default:
 		if v, err := strconv.ParseInt(string(args[0].valStr), 0, 64); err == nil {
 			args[0].valType = valTypeFloat
@@ -321,7 +418,7 @@ func cmdFloat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 			return args[0], nil
 		}
 	}
-	return nil, fmt.Errorf("Can't convert string to float. Line %d", k.currLine)
+	return nil, fmt.Errorf("%s:Can't convert string to float. Line %d", cmd, k.currLine)
 }
 
 func cmdFn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -347,14 +444,14 @@ func cmdFn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 	fnArgs, err := k.parse(&codeBlock{code: args[argIdx].toString(), lineNum: k.currLine}, false)
 	if err != nil {
-		return nil, fmt.Errorf("Parsing arguments of %s failed with: %s. Line: %d", errFnName(), err, k.currLine)
+		return nil, fmt.Errorf("%s: Parsing arguments of %s failed with: %s. Line: %d", cmd, errFnName(), err, k.currLine)
 	}
 
 	minArgs := 0
 	for i := range fnArgs {
 		arg, err := k.parse(&codeBlock{code: fnArgs[i].toString(), lineNum: k.currLine}, false)
 		if err != nil {
-			return nil, fmt.Errorf("Parsing argument \"%s\" of %s failed with: %s. Line: %d", fnArgs[i].toString(), errFnName(), err, k.currLine)
+			return nil, fmt.Errorf("%s: Parsing argument \"%s\" of %s failed with: %s. Line: %d", cmd, fnArgs[i].toString(), errFnName(), err, k.currLine)
 
 		}
 
@@ -458,6 +555,8 @@ func cmdIncDec(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 			}
 		case valTypeBool:
 			return nil, fmt.Errorf("Can't do `%s` with boolean. Line %d", cmd, k.currLine)
+		case valTypeList:
+			return nil, fmt.Errorf("Can't do `%s` with list. Line %d", cmd, k.currLine)
 		}
 	}
 
@@ -481,7 +580,7 @@ func cmdInt(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		args[0].valInt = int(args[0].valFloat)
 		return args[0], nil
 	case valTypeBool:
-		return nil, fmt.Errorf("Can't convert boolean to integer. Line %d", k.currLine)
+		return nil, fmt.Errorf("%s: Can't convert boolean to integer. Line %d", cmd, k.currLine)
 	default:
 		if v, err := strconv.ParseInt(string(args[0].valStr), 0, 64); err == nil {
 			args[0].valType = valTypeInt
@@ -494,7 +593,43 @@ func cmdInt(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 			return args[0], nil
 		}
 	}
-	return nil, fmt.Errorf("Can't convert string to integer. Line %d", k.currLine)
+	return nil, fmt.Errorf("%s: Can't convert string to integer. Line %d", cmd, k.currLine)
+}
+
+func cmdLast(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	o, present := k.currFrame.objects[args[0].toString()]
+
+	if !present {
+		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, args[0].toString(), k.currLine)
+	}
+	if o.valType == valTypeList {
+		if len(o.valList) > 0 {
+			return o.valList[len(o.valList)-1].clone(), nil
+		} else {
+			return nil, fmt.Errorf("%s: list is empty. Line %d", cmd, k.currLine)
+		}
+	}
+	return nil, fmt.Errorf("%s: Given object isn't a list. Line %d", cmd, k.currLine)
+}
+
+func cmdList(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	l := &obj{valType: valTypeList, valList: make([]*obj, 0, len(args))}
+	for i := range args {
+		l.valList = append(l.valList, args[i].clone())
+	}
+	return l, nil
+}
+
+func cmdLen(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	o, present := k.currFrame.objects[args[0].toString()]
+
+	if !present {
+		return nil, fmt.Errorf("%s: No such variable: %s. Line %d", cmd, args[0].toString(), k.currLine)
+	}
+	if o.valType == valTypeList {
+		return &obj{valType: valTypeInt, valInt: len(o.valList)}, nil
+	}
+	return nil, fmt.Errorf("%s: Given object isn't a list. Line %d", cmd, k.currLine)
 }
 
 func cmdLoop(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -522,10 +657,10 @@ func cmdReturn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		if len(res) == 1 {
 			return res[0], nil
 		} else {
-			return nil, fmt.Errorf("Too many objects to return. Line: %d", k.currLine)
+			return nil, fmt.Errorf("%s: Too many objects to return. Line: %d", cmd, k.currLine)
 		}
 	} else {
-		return nil, fmt.Errorf("Failed return given object: %v", err)
+		return nil, fmt.Errorf("%s: Failed return given object: %v", cmd, err)
 	}
 }
 
@@ -598,6 +733,10 @@ func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		}
 	}
 	return res, nil
+}
+
+func cmdWidth(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	return &obj{valType: valTypeInt, valInt: len(args[0].toString())}, nil
 }
 
 func getCmdMap() map[string][]*command {

@@ -15,6 +15,7 @@ const (
 	valTypeBool
 	valTypeStr
 	valTypeFn
+	valTypeList
 )
 
 type obj struct {
@@ -25,6 +26,7 @@ type obj struct {
 	valBool  bool
 	valStr   []byte
 	valFn    *command
+	valList  []*obj
 }
 
 func (o *obj) clone() *obj {
@@ -34,6 +36,10 @@ func (o *obj) clone() *obj {
 		valFloat: o.valFloat,
 		valBool:  o.valBool,
 		valStr:   make([]byte, cap(o.valStr)),
+		valList:  make([]*obj, 0, len(o.valList)),
+	}
+	for i := range o.valList {
+		oc.valList = append(oc.valList, o.valList[i].clone())
 	}
 	copy(oc.valStr, o.valStr)
 	return oc
@@ -54,6 +60,16 @@ func (o *obj) toBytes() []byte {
 		return o.valStr
 	case valTypeFn:
 		return o.valFn.body.toBytes()
+	case valTypeList:
+		b := make([]byte, 0, 1024)
+		b = append(b, '(')
+		for i := range o.valList {
+			b = append(b, o.valList[i].toBytes()...)
+			if i+1 < len(o.valList) {
+				b = append(b, []byte(", ")...)
+			}
+		}
+		return append(b, ')')
 	}
 	return nil
 }

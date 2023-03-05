@@ -25,11 +25,11 @@ So, no use.
 You shouldn't. Go away ;-) There are plenty of embedded languages for go that are far
 more suitable for your hobby project. I'm perfectly happy with just one user of kittla - me :-)
 The only cool thing about kittla is that is pretty small (currently < 1000 cloc) and easily extendable.
-
+I don't know TCL either, so kittla is probably doing things differently.
 
 ## Why the weird name "kittla"?
 
-Since Tcl is pronounced "tickle" and "kittla" means "to tickle someone" in in Swedish, I though it would be suitable.
+Because Tcl is pronounced "tickle" and "kittla" means "to tickle someone" in in Swedish, I though it would be suitable.
 
 ## Usage
 
@@ -66,29 +66,36 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   * Escape codes like, \n etc - but not yet Unicode nor hex escapes
   * Comment with #
   * Long lines joined with \ as last char before new line
-  * Internal objects are not strings, but `int`, `float`, `bool`, `string` or commands.
+  * Internal objects are not strings, but `int`, `float`, `bool`, `string`, `list` or commands.
   * Define your own command with `fn`. You can overload the built-ins. (Not recommended!)
     Commands can be anonymous and assigned to a variable. A new command can be returned from a command.
 
 ### Commands
-  Currently using the Tcl naming, might change! (Some alias present)
+  Some are like standard TCL, some are not.
+  * `append` -- Append one or more objects to an already existing list. The list gets updated.
   * `break`
+  * `concat` -- Concatenate two or more objects into a new string object
   * `continue`
   * `dec` -- subtract value from variable. Notice I like type safety, therefore you can't subtract a float from an int and visa versa without conversion.
   * `else`
   * `elseif`
-  * `fn` -- function. Syntax: `fn name {arguments} {body}.` Arguments can have a predefined value, example: `fn add {a {b 1}} { incr a $b }`
   * `expr` -- Calling github.com/tidwall/expr for an answer. Should be dropped and replaced with native that does not work on strings...
+  * `fn` -- function. Syntax: `fn name {arguments} {body}.` Arguments can have a predefined value, example: `fn add {a {b 1}} { incr a $b }`
+  * `first` -- First entry in a list.
   * `float` -- Converts int and tries to convert string to a `float`. Booleans won't be converted.
   * `if`
   * `inc` -- increase variable with. Same rule as for `dec`.
   * `int` -- Converts float or tries to convert string to int. Booleans won't be converted.
+  * `last` -- Last entry of a list, if list is longer than zero.
+  * `len` -- Length of a `list`.
+  * `list` -- An array of objects.
   * `loop` -- like `while {true}`
-  * `puts` -- print
+  * `puts` -- print to stdout. Ends with newline.
   * `return` -- return from command. With or without value.
   * `set` -- declare variable
   * `unknown` -- Called if command isn't known
   * `while`
+  * `width` -- Printable width of `int`, `float`, `bool`, `list` or `string`.
 
 I'm leaning towards getting kittla more type-aware, since I kinda like it.
 

@@ -3,7 +3,6 @@ package kittla
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/tidwall/expr"
 )
@@ -321,11 +320,11 @@ func cmdBreakContinue(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, er
 
 func cmdConcat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
-	var b strings.Builder
+	b := make([]byte, 0, 1024)
 	for i := range args {
-		b.WriteString(args[i].toString())
+		b = append(b, args[i].toBytes()...)
 	}
-	return &obj{valType: valTypeStr, valStr: []byte(b.String())}, nil
+	return toObj(b), nil
 }
 
 func cmdConst(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {

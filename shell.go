@@ -67,8 +67,12 @@ func (k *Kittla) Names() []string {
 	}
 
 	// FIXME: Consider what to add..
-	for i := range k.currFrame.objects {
-		names = append(names, i)
+	for name := range k.currFrame.objects {
+		if k.currFrame.objects[name].valType == valTypeFn {
+			names = append(names, name)
+		} else {
+			names = append(names, "$"+name)
+		}
 	}
 
 	sort.Strings(names)

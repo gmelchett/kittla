@@ -502,7 +502,12 @@ func cmdLoop(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 }
 
 func cmdPrint(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
-	msg := args[0].toBytes()
+	var msg []byte
+
+	if len(args) > 0 {
+		msg = args[0].toBytes()
+	}
+
 	fmt.Println(string(msg))
 	return &obj{valType: valTypeStr, valStr: msg}, nil
 }

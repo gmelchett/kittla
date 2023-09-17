@@ -80,6 +80,10 @@ mainloop:
 				fmt.Println("help wanted!")
 				prog.Reset()
 				continue mainloop
+			case "/list":
+				fmt.Println("Commands and variables:")
+				fmt.Println(k.Names())
+				continue mainloop
 			case "/reset":
 				fmt.Println(" -- Reset kittla instance")
 				k = kittla.New()

@@ -16,6 +16,7 @@ const (
 	CMD_DEC
 	CMD_CONCAT
 	CMD_CONTINUE
+	CMD_CONST
 	CMD_ELIF
 	CMD_ELSE
 	CMD_EVAL
@@ -78,6 +79,13 @@ var builtinCommands = []command{
 		maxArgs: 0,
 		id:      CMD_CONTINUE,
 		fn:      cmdBreakContinue,
+	},
+	{
+		names:   []string{"const"},
+		minArgs: 2,
+		maxArgs: 2,
+		id:      CMD_CONST,
+		fn:      cmdConst,
 	},
 	{
 		names:   []string{"dec", "decr"},
@@ -289,6 +297,10 @@ func cmdAppend(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	}
 
 	if o.valType == valTypeList {
+		if o.isConst {
+			return nil, fmt.Errorf("%s: Can't append to const list %s. Line %d", cmd, args[0].toString(), k.currLine)
+
+		}
 		for i := 1; i < len(args); i++ {
 			o.valList = append(o.valList, args[i].clone())
 		}
@@ -314,6 +326,16 @@ func cmdConcat(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		b.WriteString(args[i].toString())
 	}
 	return &obj{valType: valTypeStr, valStr: []byte(b.String())}, nil
+}
+
+func cmdConst(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
+	varName := args[0].toString()
+	if v, present := k.currFrame.objects[varName]; present && v.isConst {
+		return nil, fmt.Errorf("%s: Cannot change const variable: %s. Line: %d", cmd, varName, k.currLine)
+	}
+	k.currFrame.objects[varName] = args[1].optimize()
+	k.currFrame.objects[varName].isConst = true
+	return k.currFrame.objects[varName], nil
 }
 
 func cmdElIf(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
@@ -517,6 +539,10 @@ func cmdIncDec(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 		return nil, fmt.Errorf("First variable isn't a number. Line %d", k.currLine)
 	}
 
+	if o.isConst {
+		return nil, fmt.Errorf("%s: Can't alter const variable: %s. Line %d", cmd, args[0].toString(), k.currLine)
+	}
+
 	df := 1.0
 	d := 1
 
@@ -670,21 +696,21 @@ func cmdUnknown(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 
 func cmdVar(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	varName := args[0].toString()
-	switch len(args) {
-	case 0:
-		return nil, fmt.Errorf("%s command must be followed with one or two arguments. Line: %d", cmd, k.currLine)
-	case 1:
-		if v, present := k.currFrame.objects[varName]; present {
+	v, present := k.currFrame.objects[varName]
+
+	if len(args) == 1 {
+		if present {
 			return v, nil
 		} else {
 			return nil, fmt.Errorf("%s: no such variable: %s. Line: %d", cmd, varName, k.currLine)
 		}
-	case 2:
-		k.currFrame.objects[varName] = args[1].optimize()
-		return k.currFrame.objects[varName], nil
-	default:
-		return nil, fmt.Errorf("%s command must be followed with at most two argument. Line: %d", cmd, k.currLine)
 	}
+
+	if present && v.isConst {
+		return nil, fmt.Errorf("%s: Can't change const '%s'. Line: %d", cmd, varName, k.currLine)
+	}
+	k.currFrame.objects[varName] = args[1].optimize()
+	return k.currFrame.objects[varName], nil
 }
 
 func cmdWhile(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {

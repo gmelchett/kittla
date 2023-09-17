@@ -20,6 +20,7 @@ const (
 
 type obj struct {
 	valType valueType
+	isConst bool
 
 	valInt   int
 	valFloat float64
@@ -31,6 +32,7 @@ type obj struct {
 
 func (o *obj) clone() *obj {
 	oc := &obj{
+		isConst:  o.isConst,
 		valType:  o.valType,
 		valInt:   o.valInt,
 		valFloat: o.valFloat,

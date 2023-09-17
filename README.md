@@ -74,26 +74,27 @@ at https://en.wikipedia.org/wiki/Tcl#Syntax_and_fundamental_semantics
   Some are like standard TCL, some are not.
   * `append` -- Append one or more objects to an already existing list. The list gets updated.
   * `break`
-  * `concat` -- Concatenate two or more objects into a new string object
+  * `concat` -- Concatenate two or more objects into a new string object.
   * `continue`
-  * `dec` -- subtract value from variable. Notice I like type safety, therefore you can't subtract a float from an int and visa versa without conversion.
+  * `const` -- Create a constant that cannot be changed during the programs life time.
+  * `dec` -- Subtract value from variable. Notice I like type safety, therefore you can't subtract a float from an int and visa versa without conversion.
   * `else`
   * `elseif`
   * `expr` -- Calling github.com/tidwall/expr for an answer. Should be dropped and replaced with native that does not work on strings...
-  * `fn` -- function. Syntax: `fn name {arguments} {body}.` Arguments can have a predefined value, example: `fn add {a {b 1}} { incr a $b }`
+  * `fn` -- Define a function. Syntax: `fn name {arguments} {body}.` Arguments can have a predefined value, example: `fn add {a {b 1}} { incr a $b }`
   * `first` -- First entry in a list.
   * `float` -- Converts int and tries to convert string to a `float`. Booleans won't be converted.
   * `if`
-  * `inc` -- increase variable with. Same rule as for `dec`.
+  * `inc` -- Increase variable with. Same rule as for `dec`.
   * `int` -- Converts float or tries to convert string to int. Booleans won't be converted.
   * `last` -- Last entry of a list, if list is longer than zero.
   * `len` -- Length of a `list`.
   * `list` -- An array of objects.
-  * `loop` -- like `while {true}`
-  * `puts` -- print to stdout. Ends with newline.
-  * `return` -- return from command. With or without value.
-  * `set` -- declare variable
-  * `unknown` -- Called if command isn't known
+  * `loop` -- Like `while {true}`
+  * `puts` -- Print to stdout. Ends with newline.
+  * `return` -- Return from command. With or without value.
+  * `set` -- Declare variable.
+  * `unknown` -- Called if command isn't known.
   * `while`
   * `width` -- Printable width of `int`, `float`, `bool`, `list` or `string`.
 

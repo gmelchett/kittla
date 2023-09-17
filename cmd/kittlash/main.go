@@ -74,9 +74,8 @@ mainloop:
 	for {
 		if cmd, err := line.Prompt(prompt); err == nil {
 			line.AppendHistory(cmd)
-			prog.WriteString(cmd)
 
-			switch prog.String() {
+			switch cmd {
 			case "/help":
 				fmt.Println("help wanted!")
 				prog.Reset()
@@ -93,9 +92,10 @@ mainloop:
 				continue mainloop
 			default:
 			}
-			prog.WriteString(";")
+			prog.WriteString(cmd)
 
 			if depth := k.GetNumUnclosed(prog.String()); depth == 0 {
+				prog.WriteString(";")
 				if res, lastFunc, err := k.Execute(prog.String()); err == nil {
 					if lastFunc != kittla.CMD_PRINT {
 						fmt.Println(string(res))
@@ -110,6 +110,7 @@ mainloop:
 				prog.Reset()
 				prompt = defaultPrompt
 			} else {
+				prog.WriteString(" ")
 				prompt = "... " + strings.Repeat("    ", depth)
 			}
 

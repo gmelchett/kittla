@@ -90,9 +90,13 @@ func toObj(arg []byte) *obj {
 	if v, err := strconv.ParseFloat(string(arg), 64); err == nil {
 		return &obj{valType: valTypeFloat, valFloat: v}
 	}
-	if v, err := strconv.ParseBool(string(arg)); err == nil {
-		return &obj{valType: valTypeBool, valBool: v}
+	if string(arg) == "true" {
+		return &obj{valType: valTypeBool, valBool: true}
 	}
+	if string(arg) == "false" {
+		return &obj{valType: valTypeBool, valBool: false}
+	}
+
 	return &obj{valType: valTypeStr, valStr: arg}
 }
 

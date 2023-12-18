@@ -48,6 +48,9 @@ type command struct {
 	// For commands in kittla
 	args []*obj
 	body *obj
+
+	// For functions go
+	goFn func(*Kittla, []string) (string, error)
 }
 
 var builtinCommands = []command{
@@ -285,7 +288,6 @@ func callFn(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {
 	}
 
 	return call(k, fn, cmd, args)
-
 }
 
 func cmdAppend(k *Kittla, cmdID CmdID, cmd string, args []*obj) (*obj, error) {

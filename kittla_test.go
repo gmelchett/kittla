@@ -2,6 +2,7 @@ package kittla
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -471,19 +472,37 @@ var parserTests = []parserTest{
 		},
 	},
 	{
-		program: "set k 3; set a [list 1 2 $k]; set c [last a]",
+		program: "set k 3; goadd k 3",
 		expects: map[string]string{
-			"a": "(1, 2, 3)",
-			"c": "3",
-			"k": "3",
+			"k": "6",
 		},
 	},
+}
+
+func testAdd(k *Kittla, args []string) (string, error) {
+	var v int
+	if v_str, present := k.GetVar(args[0]); present {
+		var err error
+		v, err = strconv.Atoi(v_str)
+		if err != nil {
+			return "", fmt.Errorf("'%s' does not contain a number.", args[0])
+		}
+	}
+
+	v2, err := strconv.Atoi(args[1])
+	if err != nil {
+		return "", fmt.Errorf("Second argument '%s' is not a  number.", args[1])
+	}
+	k.SetVar(args[0], strconv.Itoa(v+v2))
+	return "", nil
 }
 
 func TestParser(t *testing.T) {
 
 	for i, te := range parserTests {
 		k := New()
+		k.AddFunction("goadd", 2, 2, testAdd)
+
 		_, _, err := k.Execute(te.program)
 		if (err != nil) != te.fails {
 			t.Logf("test %d - Failure not matching Excepted failure: %t got: %v\n", i, te.fails, err)

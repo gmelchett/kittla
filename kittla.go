@@ -134,6 +134,26 @@ func New() *Kittla {
 	return k
 }
 
+func (k *Kittla) AddFunction(cmdName string, minArgs, maxArgs int, goFn func(*Kittla, []string) (string, error)) error {
+	if maxArgs < minArgs && maxArgs >= 0 {
+		return fmt.Errorf("Max number of arguments can't be less than minimum number of arguments")
+	}
+	k.commands[cmdName] = append(k.commands[cmdName], &command{names: []string{cmdName}, minArgs: minArgs, maxArgs: maxArgs, id: k.nextFnId, goFn: goFn})
+	k.nextFnId++
+	return nil
+}
+
+func (k *Kittla) SetVar(varName, value string) {
+	k.currFrame.objects[varName] = toObj([]byte(value))
+}
+
+func (k *Kittla) GetVar(varName string) (string, bool) {
+	if v, present := k.currFrame.objects[varName]; present {
+		return v.toString(), true
+	}
+	return "", false
+}
+
 // Execute one parsed command. First entry in args is the command. Might be recursive in case of
 // more complex commands like if {} {body}.
 func (k *Kittla) executeCmd(args []*obj) (*obj, error) {
@@ -171,9 +191,20 @@ func (k *Kittla) executeCmd(args []*obj) (*obj, error) {
 		if cmd[i].minArgs == -1 || len(args[1:]) >= cmd[i].minArgs {
 			if cmd[i].maxArgs == -1 || len(args[1:]) <= cmd[i].maxArgs {
 				defer func() { k.currFrame.prevCmd = cmd[i].id }()
-				if !ano {
+				if cmd[i].goFn != nil { // Added go functions
+					argsStrs := make([]string, 0, len(args[1:]))
+					for i := range args[1:] {
+						argsStrs = append(argsStrs, args[i+1].toString())
+					}
+
+					v, err := cmd[i].goFn(k, argsStrs)
+					if err == nil {
+						return toObj([]byte(v)), err
+					}
+					return nil, err
+				} else if !ano { // Functions without a name
 					return cmd[i].fn(k, cmd[i].id, cmdName, args[1:])
-				} else {
+				} else { // normal functions
 					return call(k, cmd[0], cmdName, args[1:])
 				}
 			}

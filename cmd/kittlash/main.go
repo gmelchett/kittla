@@ -14,22 +14,17 @@ import (
 	"github.com/peterh/liner"
 )
 
-func createDir(dir string) (err error) {
-
-	if stat, err := os.Stat(dir); err != nil || !stat.IsDir() {
-		err = os.MkdirAll(dir, 0755)
-	}
-	return
-}
-
 const defaultPrompt = "% "
 
 func interactive() {
 
 	xdgh := xdg.New("gmelchett", "kittlash")
 
-	if err := createDir(xdgh.ConfigHome()); err != nil {
-		log.Fatal("Failed creating config directory", err)
+	if stat, err := os.Stat(xdgh.ConfigHome()); err != nil || !stat.IsDir() {
+		err = os.MkdirAll(xdgh.ConfigHome(), 0755)
+		if err != nil {
+			log.Fatal("Failed creating config directory", err)
+		}
 	}
 
 	historyFile := filepath.Join(xdgh.ConfigHome(), "history.txt")
